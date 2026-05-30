@@ -1,0 +1,91 @@
+# See https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  modules-download-mode: readonly
+  tests: true
+
+linters:
+  # Keep the enabled set explicit and intentional.
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nilerr
+    - revive
+    - staticcheck
+    - unparam
+    - unused
+
+  settings:
+    errcheck:
+      # Also report ignored errors assigned to the blank identifier.
+      check-blank: true
+      # Type assertions can fail; make unchecked assertions visible.
+      check-type-assertions: true
+
+    gosec:
+      # Let gosec run its default rule set. Use inline `#nosec Gxxx -- reason`
+      # comments for intentional exceptions.
+      excludes: []
+
+    govet:
+      # Run all vet analyzers supported by the current Go toolchain.
+      enable-all: true
+
+    revive:
+      severity: warning
+      confidence: 0.8
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+  exclusions:
+    generated: strict
+    warn-unused: true
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+
+  settings:
+    gofumpt:
+      module-path: github.com/cwygoda/cql2
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/cwygoda/cql2
+
+  exclusions:
+    generated: strict
+    warn-unused: true

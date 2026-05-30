@@ -1,0 +1,57 @@
+version: "3"
+
+tasks:
+  default:
+    silent: true
+    cmd: task --list --sort alphanumeric
+
+  bootstrap:
+    desc: bootstrap local checkout for dev work
+    cmds:
+      - go mod download
+      - lefthook install
+
+  test:unit:
+    desc: run unit tests
+    cmd: gotestsum --format testname -- -race ./...
+
+  test:
+    desc: run all test suites
+    deps:
+      - test:unit
+
+  format:
+    desc: format source code
+    cmds:
+      - gofumpt -w .
+      - goimports -w .
+
+  lint:
+    desc: run all linters
+    deps:
+      - lint:go
+      - lint:markdown
+
+  lint:go:
+    desc: run Go linters with golangci-lint
+    cmd: golangci-lint run ./...
+
+  lint:markdown:
+    desc: run Markdown linter
+    cmd: markdownlint-cli2
+
+  vulnerabilities:
+    desc: check dependency vulnerabilities
+    cmds:
+      - govulncheck ./...
+      - osv-scanner scan source .
+
+  secrets:
+    desc: check for secrets in code
+    cmd: gitleaks dir
+
+  check:
+    desc: run all checks
+    deps:
+      - lint
+      - test
