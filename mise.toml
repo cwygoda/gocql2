@@ -1,0 +1,12 @@
+[tools]
+"go:golang.org/x/tools/cmd/goimports" = "0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1"
+cocogitto = "7"
+gitleaks = "8"
+go = "1.26"
+gofumpt = "0"
+golangci-lint = "2"
+gotestsum = "1"
+markdownlint-cli2 = "0"
+osv-scanner = "2"
+task = "3"

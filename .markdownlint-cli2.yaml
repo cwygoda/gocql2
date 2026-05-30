@@ -1,0 +1,12 @@
+globs:
+  - "**/*.md"
+ignores:
+  - ".notes/**"
+
+config:
+  # Prefer readable Markdown over hard wrapping, especially for examples and links.
+  MD013: false
+  # Tables must have a consistent pipe style and column count.
+  MD055:
+    style: leading_and_trailing
+  MD056: true
