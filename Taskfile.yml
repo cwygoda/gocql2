@@ -31,6 +31,11 @@ tasks:
     deps:
       - lint:go
       - lint:markdown
+      - lint:actions
+
+  lint:actions:
+    desc: run GitHub Actions workflow linter
+    cmd: actionlint
 
   lint:go:
     desc: run Go linters with golangci-lint
