@@ -1,0 +1,107 @@
+name: Security
+run-name: ${{ github.event.pull_request.title || github.ref_name }} - Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Run weekly on Mondays at 03:17 UTC.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  govulncheck:
+    name: Go vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  osv-pr:
+    name: OSV PR
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.5
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      scan-args: |-
+        --recursive
+        ./
+      upload-sarif: false
+      fail-on-vuln: true
+
+  osv:
+    name: OSV
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      scan-args: |-
+        --recursive
+        ./
+      upload-sarif: false
+      fail-on-vuln: true
+
+  gitleaks:
+    name: Secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup mise
+        uses: jdx/mise-action@v4
+        with:
+          install_args: gitleaks
+
+      - name: Run gitleaks
+        run: mise exec -- gitleaks detect --source . --redact --verbose
+
+  gosec:
+    name: Go security lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Run gosec via golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+          args: --enable-only=gosec ./...

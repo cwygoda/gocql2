@@ -6,6 +6,9 @@ pre-commit:
       stage_fixed: true
     lint:
       run: task lint:go
+    actions:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: task lint:actions
     markdown:
       glob: "**/*.md"
       run: task lint:markdown
