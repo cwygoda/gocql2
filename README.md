@@ -12,6 +12,7 @@ Then install tools and bootstrap your local project checkout with `mise install 
 ...are run using [task], configured in [Taskfile.yml](./Taskfile.yml):
 
 - `task format`: format source code (using [gofumpt])
+- `task lint:actions`: lint Github actions (using [actionlint])
 - `task lint:go`: lint Go source code (using [golangci-lint])
 - `task lint:markdown`: lint Markdown files (using [markdownlint-cli2])
 - `task lint`: lint source code and Markdown
@@ -27,6 +28,7 @@ When committing, [lefthook] managed git hooks are run (see [.lefthook.yml](./.le
 check the code and commit message, which has to use [conventional commits] style (checked using
 [cocogitto]).
 
+[actionlint]: https://github.com/rhysd/actionlint
 [cocogitto]: https://docs.cocogitto.io
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 [gitleaks]: https://github.com/gitleaks/gitleaks
