@@ -1,5 +1,7 @@
 # gocql2 - OGC CQL2 parser with SQL generation
 
+[![codecov](https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4)](https://codecov.io/github/cwygoda/gocql2)
+
 ## Dev 101
 
 You really only need [mise] which is used to manage the correct Golang version and all other
