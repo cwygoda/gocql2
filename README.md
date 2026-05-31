@@ -19,6 +19,7 @@ Then install tools and bootstrap your local project checkout with `mise install 
 - `task lint:markdown`: lint Markdown files (using [markdownlint-cli2])
 - `task lint`: lint source code and Markdown
 - `task test:unit`: run unit tests (using [gotestsum])
+- `task test:ats`: run CQL2 Abstract Test Suite Gherkin tests
 - `task test`: run all test suites
 - `task check`: run lint and test
 - `task vulnerabilities`: check dependencies for vulnerabilities (using [govuln] and [osv-scanner])
