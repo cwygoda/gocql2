@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 
@@ -87,6 +88,13 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I parse the CQL2 JSON filter:$`, s.iParseTheCQL2JSONFilter)
 	ctx.Step(`^parsing succeeds$`, s.parsingSucceeds)
 	ctx.Step(`^the comparison right literal is "([^"]*)"$`, s.theComparisonRightLiteralIs)
+
+	ctx.Step(`^One or more data sources, each with a list of queryables\.$`, s.oneOrMoreDataSourcesWithQueryableLists)
+	ctx.Step(`^At least one queryable has an array data type\.$`, s.atLeastOneQueryableHasArrayDataType)
+	ctx.Step(`^For each queryable \{queryable\} with an array data type, evaluate the following filter expressions$`, s.forEachArrayQueryableEvaluateFilters)
+	ctx.Step(`^(A_(?:CONTAINS|CONTAINEDBY|EQUALS|OVERLAPS)\(\{queryable\},\("foo","bar"\)\))$`, s.iEvaluateTheArrayPredicateTemplate)
+	ctx.Step(`^assert successful execution of the evaluation;$`, s.arrayPredicateParsingSucceeds)
+	ctx.Step(`^store the valid predicates for each data source\.$`, s.storeTheValidPredicatesForEachDataSource)
 }
 
 func scenarioHasTag(sc *godog.Scenario, tag string) bool {
@@ -141,6 +149,62 @@ func (s *cql2ATSSuite) theComparisonRightLiteralIs(want string) error {
 	}
 	if literal.Value != want {
 		return fmt.Errorf("comparison right literal is %q, want %q", literal.Value, want)
+	}
+	return nil
+}
+
+const arrayPredicateATSID = "/conf/array-functions/array-predicates"
+
+func (s *cql2ATSSuite) isArrayPredicateATS() bool {
+	return s.current.ID == arrayPredicateATSID
+}
+
+func (s *cql2ATSSuite) oneOrMoreDataSourcesWithQueryableLists() error {
+	if s.isArrayPredicateATS() {
+		s.executedByStep = true
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) atLeastOneQueryableHasArrayDataType() error {
+	if s.isArrayPredicateATS() {
+		s.executedByStep = true
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) forEachArrayQueryableEvaluateFilters() error {
+	if s.isArrayPredicateATS() {
+		s.executedByStep = true
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
+	if !s.isArrayPredicateATS() {
+		return nil
+	}
+	s.executedByStep = true
+	filter = strings.ReplaceAll(filter, "{queryable}", "tags")
+	s.parsed, s.parseErr = ParseText(filter, WithAllowedProperties(
+		PropertyDefinition{Name: "tags", Type: PropertyTypeArray},
+		PropertyDefinition{Name: "foo", Type: PropertyTypeString},
+		PropertyDefinition{Name: "bar", Type: PropertyTypeString},
+	))
+	return s.parseErr
+}
+
+func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
+	if !s.isArrayPredicateATS() {
+		return nil
+	}
+	s.executedByStep = true
+	return s.parseErr
+}
+
+func (s *cql2ATSSuite) storeTheValidPredicatesForEachDataSource() error {
+	if s.isArrayPredicateATS() {
+		s.executedByStep = true
 	}
 	return nil
 }

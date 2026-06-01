@@ -15,6 +15,8 @@ func FuzzParseTextDoesNotPanic(f *testing.F) {
 		`status IN ('new','done')`,
 		`NOT (a = 1 OR b <> 2)`,
 		`CASEI(name) = casei('alice')`,
+		`A_CONTAINS(tags, ('foo', 'bar'))`,
+		`A_OVERLAPS(tags, (1, TRUE, status = 'new'))`,
 		`"AND" = 1`,
 	} {
 		f.Add(seed)
@@ -101,12 +103,53 @@ func cqlTextString(value string) string {
 	return "'" + strings.NewReplacer(`\\`, `\\\\`, `'`, `\'`).Replace(value) + "'"
 }
 
+func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
+	for _, seed := range []struct {
+		op     string
+		first  string
+		second string
+	}{
+		{"a_contains", "foo", "bar"},
+		{"a_containedby", "", "quoted'value"},
+		{"a_equals", "é", "slash\\value"},
+		{"a_overlaps", "nested", "percent%_"},
+	} {
+		f.Add(seed.op, seed.first, seed.second)
+	}
+	f.Fuzz(func(t *testing.T, op, first, second string) {
+		op = strings.ToLower(op)
+		if _, ok := arrayPredicateOps[op]; !ok {
+			op = string(ArrayOpContains)
+		}
+
+		text := fmt.Sprintf("%s(tags, (%s, %s))", strings.ToUpper(op), cqlTextString(first), cqlTextString(second))
+		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+			t.Fatalf("ParseText(%q): %v", text, err)
+		}
+
+		jsonFirst, err := json.Marshal(first)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q): %v", first, err)
+		}
+		jsonSecond, err := json.Marshal(second)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q): %v", second, err)
+		}
+		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"tags"},[%s,%s]]}`, op, jsonFirst, jsonSecond)
+		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+			t.Fatalf("ParseJSON(%s): %v", input, err)
+		}
+	})
+}
+
 func FuzzParseJSONDoesNotPanic(f *testing.F) {
 	for _, seed := range []string{
 		`{"op":"=","args":[{"property":"name"},"alice"]}`,
 		`{"op":"and","args":[true,{"op":"not","args":[false]}]}`,
 		`{"op":"in","args":[{"property":"status"},["new","done"]]}`,
 		`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["alice"]}]}`,
+		`{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`,
+		`{"op":"a_overlaps","args":[{"property":"tags"},[1,true,{"op":"=","args":[{"property":"status"},"new"]}]]}`,
 		`null`,
 		`{`,
 	} {

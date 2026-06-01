@@ -219,6 +219,11 @@ func TestTextAndJSONParity(t *testing.T) {
 			text: `(height + 1) * 2 >= other DIV 3`,
 			json: `{"op":">=","args":[{"op":"*","args":[{"op":"+","args":[{"property":"height"},1]},2]},{"op":"div","args":[{"property":"other"},3]}]}`,
 		},
+		{
+			name: "array predicate",
+			text: `A_CONTAINS(tags, ('foo', 'bar'))`,
+			json: `{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`,
+		},
 	}
 	for _, tt := range pairs {
 		t.Run(tt.name, func(t *testing.T) {
@@ -271,6 +276,8 @@ func semantic(node Node) any {
 		return map[string]any{"type": "in", "expr": semantic(n.Expr), "values": values, "not": n.Not}
 	case *IsNullExpression:
 		return map[string]any{"type": "isNull", "expr": semantic(n.Expr), "not": n.Not}
+	case *ArrayPredicateExpression:
+		return map[string]any{"type": "arrayPredicate", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
 	case *PropertyRef:
 		return map[string]any{"type": "property", "name": n.Name}
 	case *Literal:
