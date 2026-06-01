@@ -39,6 +39,19 @@ func TestParserCapabilities(t *testing.T) {
 			t.Fatal("SupportedPropertyDefinitions exposed internal storage")
 		}
 	}
+
+	functionParser := NewParser(WithAllowedFunctions(CaseIFunction(), AccentiFunction()))
+	fnDefs := functionParser.SupportedFunctionDefinitions()
+	if got, want := len(fnDefs), 2; got != want {
+		t.Fatalf("len(SupportedFunctionDefinitions()) = %d, want %d", got, want)
+	}
+	fnDefs[0].Name = "mutated"
+	fnDefs[0].Args[0].Types[0] = FunctionTypeNumber
+	for _, def := range functionParser.SupportedFunctionDefinitions() {
+		if def.Name == "mutated" || def.Args[0].Types[0] != FunctionTypeString {
+			t.Fatal("SupportedFunctionDefinitions exposed internal storage")
+		}
+	}
 }
 
 func TestAllowedPropertyRegistry(t *testing.T) {
