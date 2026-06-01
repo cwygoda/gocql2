@@ -1,11 +1,16 @@
 package gocql2
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 const defaultMaxDepth = 128
 
 // ParseConfig configures parser behavior.
 type ParseConfig struct {
+	properties propertyRegistry
+
 	MaxDepth int
 }
 
@@ -39,9 +44,28 @@ func WithMaxDepth(n int) ParseOption {
 	return func(p *Parser) { p.cfg.MaxDepth = n }
 }
 
-// WithSupportedProperties records the parser's advertised property set.
+// WithSupportedProperties records the parser's advertised property set and
+// restricts parsing to that allow-list. Properties are treated as untyped; use
+// WithAllowedProperties when type validation is needed.
 func WithSupportedProperties(names ...string) ParseOption {
-	return func(p *Parser) { p.supportedProperties = cloneStrings(names) }
+	return func(p *Parser) {
+		p.supportedProperties = cloneStrings(names)
+		defs := make([]PropertyDefinition, 0, len(names))
+		for _, name := range names {
+			defs = append(defs, PropertyDefinition{Name: name, Type: PropertyTypeAny})
+		}
+		p.cfg.properties = newPropertyRegistry(defs, true)
+	}
+}
+
+// WithAllowedProperties configures a fail-closed property registry. Any property
+// reference not present in the registry is rejected, and registered types are
+// used to validate character, numeric, comparison, and IN-list contexts.
+func WithAllowedProperties(defs ...PropertyDefinition) ParseOption {
+	return func(p *Parser) {
+		p.supportedProperties = propertyNames(defs)
+		p.cfg.properties = newPropertyRegistry(defs, true)
+	}
 }
 
 // WithSupportedFunctions records the parser's advertised function set.
@@ -57,6 +81,11 @@ func WithConformanceClasses(classes ...string) ParseOption {
 // SupportedProperties returns the advertised property names.
 func (p *Parser) SupportedProperties() []string {
 	return cloneStrings(p.supportedProperties)
+}
+
+// SupportedPropertyDefinitions returns the configured allowed properties.
+func (p *Parser) SupportedPropertyDefinitions() []PropertyDefinition {
+	return clonePropertyDefinitions(p.cfg.properties.defs)
 }
 
 // SupportedFunctions returns the advertised function names.
@@ -112,5 +141,30 @@ func cloneStrings(values []string) []string {
 	}
 	out := make([]string, len(values))
 	copy(out, values)
+	return out
+}
+
+func propertyNames(defs []PropertyDefinition) []string {
+	if len(defs) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(defs))
+	for _, def := range defs {
+		if def.Name != "" {
+			names = append(names, def.Name)
+		}
+	}
+	return names
+}
+
+func clonePropertyDefinitions(defs map[string]PropertyDefinition) []PropertyDefinition {
+	if len(defs) == 0 {
+		return nil
+	}
+	out := make([]PropertyDefinition, 0, len(defs))
+	for _, def := range defs {
+		out = append(out, def)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }

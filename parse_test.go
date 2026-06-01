@@ -9,7 +9,10 @@ import (
 
 func TestParserCapabilities(t *testing.T) {
 	parser := NewParser(
-		WithSupportedProperties("name", "height"),
+		WithAllowedProperties(
+			PropertyDefinition{Name: "name", Type: PropertyTypeString},
+			PropertyDefinition{Name: "height", Type: PropertyTypeNumber},
+		),
 		WithSupportedFunctions("tolower"),
 		WithConformanceClasses("/conf/cql2-text/validate"),
 	)
@@ -28,6 +31,74 @@ func TestParserCapabilities(t *testing.T) {
 	if parser.SupportedProperties()[0] != "name" {
 		t.Fatal("SupportedProperties exposed internal storage")
 	}
+
+	defs := parser.SupportedPropertyDefinitions()
+	defs[0].Name = "mutated"
+	for _, def := range parser.SupportedPropertyDefinitions() {
+		if def.Name == "mutated" {
+			t.Fatal("SupportedPropertyDefinitions exposed internal storage")
+		}
+	}
+}
+
+func TestAllowedPropertyRegistry(t *testing.T) {
+	typedRegistry := WithAllowedProperties(
+		PropertyDefinition{Name: "name", Type: PropertyTypeString},
+		PropertyDefinition{Name: "height", Type: PropertyTypeNumber},
+		PropertyDefinition{Name: "count", Type: PropertyTypeInteger},
+		PropertyDefinition{Name: "active", Type: PropertyTypeBoolean},
+		PropertyDefinition{Name: "geometry", Type: PropertyTypeGeometry},
+	)
+
+	okCases := []struct {
+		name string
+		lang Language
+		in   string
+	}{
+		{name: "text string", lang: LanguageText, in: `name = 'alice'`},
+		{name: "text numeric", lang: LanguageText, in: `height BETWEEN 1 AND 2`},
+		{name: "text integer numeric", lang: LanguageText, in: `count + 1 > 2`},
+		{name: "text boolean", lang: LanguageText, in: `active = TRUE`},
+		{name: "json string", lang: LanguageJSON, in: `{"op":"like","args":[{"property":"name"},"a%"]}`},
+		{name: "json numeric", lang: LanguageJSON, in: `{"op":"between","args":[{"property":"height"},1,2]}`},
+	}
+	for _, tt := range okCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Parse([]byte(tt.in), tt.lang, typedRegistry); err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+		})
+	}
+
+	errorCases := []struct {
+		name    string
+		lang    Language
+		in      string
+		message string
+	}{
+		{name: "text unknown", lang: LanguageText, in: `missing = 1`, message: `property "missing" is not allowed`},
+		{name: "json unknown", lang: LanguageJSON, in: `{"op":"=","args":[{"property":"missing"},1]}`, message: `property "missing" is not allowed`},
+		{name: "text string as numeric", lang: LanguageText, in: `name BETWEEN 1 AND 2`, message: `BETWEEN operands must be numeric expressions`},
+		{name: "json string as numeric", lang: LanguageJSON, in: `{"op":"between","args":[{"property":"name"},1,2]}`, message: `expected numeric expression`},
+		{name: "text number as character", lang: LanguageText, in: `height LIKE '1%'`, message: `LIKE left operand must be a character expression`},
+		{name: "json number as character", lang: LanguageJSON, in: `{"op":"like","args":[{"property":"height"},"1%"]}`, message: `expected character expression`},
+		{name: "text comparison mismatch", lang: LanguageText, in: `height = 'tall'`, message: `cannot compare number expression to string expression`},
+		{name: "json comparison mismatch", lang: LanguageJSON, in: `{"op":"=","args":[{"property":"active"},1]}`, message: `cannot compare boolean expression to number expression`},
+		{name: "text non scalar", lang: LanguageText, in: `geometry = 'POINT (0 0)'`, message: `cannot be used as a scalar expression`},
+		{name: "json in mismatch", lang: LanguageJSON, in: `{"op":"in","args":[{"property":"name"},["a",1]]}`, message: `IN list value has type number, expected string`},
+	}
+	for _, tt := range errorCases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.in), tt.lang, typedRegistry)
+			assertParseErrorContains(t, err, tt.message)
+		})
+	}
+
+	if _, err := ParseText(`name BETWEEN 1 AND 2`, WithSupportedProperties("name")); err != nil {
+		t.Fatalf("untyped supported property should remain usable in numeric context: %v", err)
+	}
+	_, err := ParseText(`other = 1`, WithSupportedProperties("name"))
+	assertParseErrorContains(t, err, `property "other" is not allowed`)
 }
 
 func TestParseDispatchAndJSONPathString(t *testing.T) {
