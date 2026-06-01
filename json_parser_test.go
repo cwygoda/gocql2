@@ -158,6 +158,31 @@ func TestParseJSONFunctionsAndArrays(t *testing.T) {
 	}
 }
 
+func TestParseJSONArithmetic(t *testing.T) {
+	expr, err := ParseJSON([]byte(`{"op":">=","args":[{"op":"*","args":[{"op":"+","args":[{"property":"a"},1]},2]},{"op":"div","args":[{"property":"b"},3]}]}`))
+	if err != nil {
+		t.Fatalf("ParseJSON arithmetic: %v", err)
+	}
+	cmp, ok := expr.(*ComparisonExpression)
+	if !ok {
+		t.Fatalf("expr = %T, want ComparisonExpression", expr)
+	}
+	left, ok := cmp.Left.(*ArithmeticExpression)
+	if !ok || left.Op != ArithmeticMul {
+		t.Fatalf("left = %#v, want multiplication", cmp.Left)
+	}
+	right, ok := cmp.Right.(*ArithmeticExpression)
+	if !ok || right.Op != ArithmeticIntDiv {
+		t.Fatalf("right = %#v, want integer division", cmp.Right)
+	}
+
+	_, err = ParseJSON([]byte(`{"op":"+","args":[1]}`))
+	assertParseErrorContains(t, err, `unsupported reserved operation "+"`)
+
+	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"+","args":["a",1]}]}`))
+	assertParseErrorContains(t, err, "expected numeric expression")
+}
+
 func TestParseJSONDepthLimit(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"not","args":[{"op":"not","args":[true]}]}`), WithMaxDepth(1))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")

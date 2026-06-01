@@ -84,19 +84,17 @@ func (p *textParser) parseNot(depth int) (Expression, error) {
 }
 
 func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
-	if p.match(tokenLParen, "") {
-		start := p.previous().span.Start
+	if p.at(tokenLParen, "") {
+		startPos := p.pos
+		p.advance()
 		expr, err := p.parseExpression(depth + 1)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
+				return nil, err
+			}
+			return expr, nil
 		}
-		end, err := p.expect(tokenRParen, "closing parenthesis")
-		if err != nil {
-			return nil, err
-		}
-		_ = start
-		_ = end
-		return expr, nil
+		p.pos = startPos
 	}
 
 	left, err := p.parseScalar(depth + 1)
@@ -257,7 +255,7 @@ func isNumericExpression(scalar ScalarExpression) bool {
 	switch value := scalar.(type) {
 	case *Literal:
 		return value.Kind == LiteralNumber
-	case *PropertyRef, *FunctionCall:
+	case *PropertyRef, *FunctionCall, *ArithmeticExpression:
 		return true
 	default:
 		return false
@@ -265,6 +263,45 @@ func isNumericExpression(scalar ScalarExpression) bool {
 }
 
 func (p *textParser) parseScalar(depth int) (ScalarExpression, error) {
+	return p.parseArithmeticExpression(depth+1, 0)
+}
+
+func (p *textParser) parseArithmeticExpression(depth, minPrecedence int) (ScalarExpression, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+
+	left, err := p.parseScalarPrimary(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		op, precedence, ok := p.peekArithmeticOperator()
+		if !ok || precedence < minPrecedence {
+			return left, nil
+		}
+		if !isNumericExpression(left) {
+			return nil, parseError(LanguageText, left.Span().Start, "arithmetic operands must be numeric expressions")
+		}
+		p.advance()
+
+		nextMinPrecedence := precedence + 1
+		if op == ArithmeticPow {
+			nextMinPrecedence = precedence
+		}
+		right, err := p.parseArithmeticExpression(depth+1, nextMinPrecedence)
+		if err != nil {
+			return nil, err
+		}
+		if !isNumericExpression(right) {
+			return nil, parseError(LanguageText, right.Span().Start, "arithmetic operands must be numeric expressions")
+		}
+		left = &ArithmeticExpression{Op: op, Left: left, Right: right, Src: Span{Start: left.Span().Start, End: right.Span().End}}
+	}
+}
+
+func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 	if depth > p.cfg.MaxDepth {
 		return nil, p.errorHere("maximum parse depth exceeded")
 	}
@@ -302,9 +339,23 @@ func (p *textParser) parseScalar(depth int) (ScalarExpression, error) {
 			return p.finishFunction(tok, depth+1)
 		}
 		return nil, parseError(LanguageText, tok.span.Start, fmt.Sprintf("reserved keyword %q cannot be used as an unquoted property name or function", tok.text), "identifier", "quoted identifier")
+	case tokenOperator:
+		if tok.text != "-" {
+			return nil, p.errorHere("expected scalar expression", "property", "literal", "function")
+		}
+		p.advance()
+		operand, err := p.parseScalarPrimary(depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		if !isNumericExpression(operand) {
+			return nil, parseError(LanguageText, operand.Span().Start, "arithmetic operands must be numeric expressions")
+		}
+		zero := &Literal{Kind: LiteralNumber, Value: "0", Src: tok.span}
+		return &ArithmeticExpression{Op: ArithmeticSub, Left: zero, Right: operand, Src: Span{Start: tok.span.Start, End: operand.Span().End}}, nil
 	case tokenLParen:
 		p.advance()
-		inner, err := p.parseScalar(depth + 1)
+		inner, err := p.parseArithmeticExpression(depth+1, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -314,6 +365,32 @@ func (p *textParser) parseScalar(depth int) (ScalarExpression, error) {
 		return inner, nil
 	default:
 		return nil, p.errorHere("expected scalar expression", "property", "literal", "function")
+	}
+}
+
+func (p *textParser) peekArithmeticOperator() (ArithmeticOp, int, bool) {
+	tok := p.peek()
+	if tok.kind == tokenKeyword && tok.text == "DIV" {
+		return ArithmeticIntDiv, 20, true
+	}
+	if tok.kind != tokenOperator {
+		return "", 0, false
+	}
+	switch tok.text {
+	case "+":
+		return ArithmeticAdd, 10, true
+	case "-":
+		return ArithmeticSub, 10, true
+	case "*":
+		return ArithmeticMul, 20, true
+	case "/":
+		return ArithmeticDiv, 20, true
+	case "%":
+		return ArithmeticMod, 20, true
+	case "^":
+		return ArithmeticPow, 30, true
+	default:
+		return "", 0, false
 	}
 }
 

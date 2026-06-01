@@ -82,9 +82,19 @@ func TestParseTextRejectsNonBooleanPrimary(t *testing.T) {
 	assertParseErrorContains(t, err, "expected predicate operator")
 }
 
-func TestParseTextRejectsHyphenatedIdentifier(t *testing.T) {
-	_, err := ParseText(`foo-bar = 1`)
-	assertParseErrorContains(t, err, "expected predicate operator")
+func TestParseTextParsesHyphenAsArithmetic(t *testing.T) {
+	expr, err := ParseText(`foo-bar = 1`)
+	if err != nil {
+		t.Fatalf("ParseText hyphen arithmetic: %v", err)
+	}
+	cmp, ok := expr.(*ComparisonExpression)
+	if !ok {
+		t.Fatalf("expr = %T, want ComparisonExpression", expr)
+	}
+	arith, ok := cmp.Left.(*ArithmeticExpression)
+	if !ok || arith.Op != ArithmeticSub {
+		t.Fatalf("left = %#v, want subtraction", cmp.Left)
+	}
 }
 
 func TestParseTextInLists(t *testing.T) {
@@ -233,6 +243,36 @@ func TestParseTextRejectsInvalidOperandShapes(t *testing.T) {
 		_, err := ParseText(input)
 		assertParseErrorContains(t, err, want)
 	}
+}
+
+func TestParseTextArithmetic(t *testing.T) {
+	expr, err := ParseText(`(a + 1) * 2 >= b DIV -c`)
+	if err != nil {
+		t.Fatalf("ParseText arithmetic: %v", err)
+	}
+	cmp, ok := expr.(*ComparisonExpression)
+	if !ok {
+		t.Fatalf("expr = %T, want ComparisonExpression", expr)
+	}
+	left, ok := cmp.Left.(*ArithmeticExpression)
+	if !ok || left.Op != ArithmeticMul {
+		t.Fatalf("left = %#v, want multiplication", cmp.Left)
+	}
+	add, ok := left.Left.(*ArithmeticExpression)
+	if !ok || add.Op != ArithmeticAdd {
+		t.Fatalf("left.Left = %#v, want addition", left.Left)
+	}
+	right, ok := cmp.Right.(*ArithmeticExpression)
+	if !ok || right.Op != ArithmeticIntDiv {
+		t.Fatalf("right = %#v, want integer division", cmp.Right)
+	}
+	unary, ok := right.Right.(*ArithmeticExpression)
+	if !ok || unary.Op != ArithmeticSub {
+		t.Fatalf("right.Right = %#v, want unary minus", right.Right)
+	}
+
+	_, err = ParseText(`'x' + 1 = 2`)
+	assertParseErrorContains(t, err, "arithmetic operands must be numeric expressions")
 }
 
 func TestParseTextDepthLimit(t *testing.T) {

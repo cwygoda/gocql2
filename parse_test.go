@@ -130,6 +130,11 @@ func TestTextAndJSONParity(t *testing.T) {
 			text: `deleted_at IS NOT NULL`,
 			json: `{"op":"isNull","args":[{"property":"deleted_at"}]}`,
 		},
+		{
+			name: "arithmetic comparison",
+			text: `(height + 1) * 2 >= other DIV 3`,
+			json: `{"op":">=","args":[{"op":"*","args":[{"op":"+","args":[{"property":"height"},1]},2]},{"op":"div","args":[{"property":"other"},3]}]}`,
+		},
 	}
 	for _, tt := range pairs {
 		t.Run(tt.name, func(t *testing.T) {
@@ -168,6 +173,8 @@ func semantic(node Node) any {
 		return map[string]any{"type": "logical", "op": string(n.Op), "args": args}
 	case *ComparisonExpression:
 		return map[string]any{"type": "comparison", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
+	case *ArithmeticExpression:
+		return map[string]any{"type": "arithmetic", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
 	case *LikeExpression:
 		return map[string]any{"type": "like", "expr": semantic(n.Expr), "pattern": semantic(n.Pattern), "not": n.Not, "modifier": n.Modifier}
 	case *BetweenExpression:

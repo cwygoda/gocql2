@@ -82,6 +82,32 @@ func (*ComparisonExpression) expressionNode() {}
 
 func (e *ComparisonExpression) Span() Span { return e.Src }
 
+// ArithmeticOp is a numeric arithmetic operation.
+type ArithmeticOp string
+
+// Supported arithmetic operators.
+const (
+	ArithmeticAdd    ArithmeticOp = "+"
+	ArithmeticSub    ArithmeticOp = "-"
+	ArithmeticMul    ArithmeticOp = "*"
+	ArithmeticDiv    ArithmeticOp = "/"
+	ArithmeticPow    ArithmeticOp = "^"
+	ArithmeticMod    ArithmeticOp = "%"
+	ArithmeticIntDiv ArithmeticOp = "div"
+)
+
+// ArithmeticExpression combines two numeric scalar expressions.
+type ArithmeticExpression struct {
+	Op    ArithmeticOp
+	Left  ScalarExpression
+	Right ScalarExpression
+	Src   Span
+}
+
+func (*ArithmeticExpression) scalarNode() {}
+
+func (e *ArithmeticExpression) Span() Span { return e.Src }
+
 // LikeExpression represents a LIKE predicate. Modifier is "", "casei", or
 // "accenti" for the right-hand pattern.
 type LikeExpression struct {
