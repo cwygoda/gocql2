@@ -26,6 +26,12 @@ const (
 	FunctionTypeArray    FunctionType = "array"
 )
 
+// Standard CQL2 text function names.
+const (
+	FunctionNameCaseI   = "casei"
+	FunctionNameAccenti = "accenti"
+)
+
 // FunctionArgument describes one positional function argument. If Variadic is
 // true, this argument must be the last argument and it may be repeated.
 type FunctionArgument struct {
@@ -46,23 +52,30 @@ type functionRegistry struct {
 	initialized bool
 }
 
+// CaseIFunction returns the CQL2 CASEI text function definition.
+func CaseIFunction() FunctionDefinition {
+	return FunctionDefinition{
+		Name:    FunctionNameCaseI,
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
+		Returns: []FunctionType{FunctionTypeString},
+	}
+}
+
+// AccentiFunction returns the CQL2 ACCENTI text function definition.
+func AccentiFunction() FunctionDefinition {
+	return FunctionDefinition{
+		Name:    FunctionNameAccenti,
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
+		Returns: []FunctionType{FunctionTypeString},
+	}
+}
+
 // StandardTextFunctions returns the CQL2-standard text functions. CQL2 does not
 // define a broader SQL-like string function library; CASEI and ACCENTI are the
 // standardized text functions provided by the case/accent-insensitive comparison
 // requirements classes.
 func StandardTextFunctions() []FunctionDefinition {
-	return []FunctionDefinition{
-		{
-			Name:    "casei",
-			Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
-			Returns: []FunctionType{FunctionTypeString},
-		},
-		{
-			Name:    "accenti",
-			Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
-			Returns: []FunctionType{FunctionTypeString},
-		},
-	}
+	return []FunctionDefinition{CaseIFunction(), AccentiFunction()}
 }
 
 func newFunctionRegistry(defs []FunctionDefinition) functionRegistry {

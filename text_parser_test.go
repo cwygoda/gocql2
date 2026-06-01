@@ -248,7 +248,15 @@ func TestParseTextPredicates(t *testing.T) {
 }
 
 func TestParseTextFunctionRegistry(t *testing.T) {
-	_, err := ParseText(`custom(name, 1)`)
+	expr, err := ParseText(`ACCENTI(CASEI(name)) = accenti(casei('ÄÉ'))`, WithAllowedFunctions(CaseIFunction(), AccentiFunction()))
+	if err != nil {
+		t.Fatalf("ParseText registered standard text functions: %v", err)
+	}
+	if _, ok := expr.(*ComparisonExpression); !ok {
+		t.Fatalf("expr = %T, want ComparisonExpression", expr)
+	}
+
+	_, err = ParseText(`custom(name, 1)`)
 	assertParseErrorContains(t, err, `function "custom" is not allowed`)
 
 	_, err = ParseText(`CASEI(1) = '1'`)
@@ -265,7 +273,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		},
 		Returns: []FunctionType{FunctionTypeBoolean},
 	}
-	expr, err := ParseText(`contains_any(name, 'a', 'b')`, WithAllowedFunctions(boolFn))
+	expr, err = ParseText(`contains_any(name, 'a', 'b')`, WithAllowedFunctions(boolFn))
 	if err != nil {
 		t.Fatalf("ParseText registered variadic function: %v", err)
 	}
