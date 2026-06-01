@@ -116,6 +116,27 @@ func TestParseJSONLikeLiteralPatterns(t *testing.T) {
 	assertParseErrorContains(t, err, "expected character expression")
 }
 
+func TestParseJSONIsNullOperands(t *testing.T) {
+	cases := []string{
+		`{"op":"isNull","args":[{"property":"deleted_at"}]}`,
+		`{"op":"isNull","args":[true]}`,
+		`{"op":"isNull","args":[{"op":"=","args":[{"property":"a"},1]}]}`,
+		`{"op":"isNull","args":[{"op":"+","args":[{"property":"height"},1]}]}`,
+	}
+	for _, input := range cases {
+		expr, err := ParseJSON([]byte(input))
+		if err != nil {
+			t.Fatalf("ParseJSON(%s): %v", input, err)
+		}
+		if _, ok := expr.(*IsNullExpression); !ok {
+			t.Fatalf("%s parsed as %T, want IsNullExpression", input, expr)
+		}
+	}
+
+	_, err := ParseJSON([]byte(`{"op":"isNull","args":[[]]}`))
+	assertParseErrorContains(t, err, "expected IS NULL operand")
+}
+
 func TestParseJSONBooleanComparisons(t *testing.T) {
 	cases := []string{
 		`{"op":"=","args":[{"property":"active"},true]}`,

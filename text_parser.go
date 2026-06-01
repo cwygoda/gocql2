@@ -92,6 +92,9 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 			if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
 				return nil, err
 			}
+			if p.matchKeyword("IS") {
+				return p.finishIsNull(expr)
+			}
 			return expr, nil
 		}
 		p.pos = startPos
@@ -170,18 +173,22 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 	}
 
 	if p.matchKeyword("IS") {
-		notNull := p.matchKeyword("NOT")
-		end, err := p.expectKeyword("NULL", "NULL")
-		if err != nil {
-			return nil, err
-		}
-		return &IsNullExpression{Expr: left, Not: notNull, Src: Span{Start: left.Span().Start, End: end.span.End}}, nil
+		return p.finishIsNull(left)
 	}
 
 	if expr, ok := scalarAsExpression(left); ok {
 		return expr, nil
 	}
 	return nil, p.errorHere("expected predicate operator", "=", "<>", "<", ">", "<=", ">=", "LIKE", "BETWEEN", "IN", "IS")
+}
+
+func (p *textParser) finishIsNull(operand Node) (*IsNullExpression, error) {
+	notNull := p.matchKeyword("NOT")
+	end, err := p.expectKeyword("NULL", "NULL")
+	if err != nil {
+		return nil, err
+	}
+	return &IsNullExpression{Expr: operand, Not: notNull, Src: Span{Start: operand.Span().Start, End: end.span.End}}, nil
 }
 
 func scalarAsExpression(scalar ScalarExpression) (Expression, bool) {

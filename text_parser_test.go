@@ -167,6 +167,24 @@ func TestParseTextLikeLiteralPatterns(t *testing.T) {
 	}
 }
 
+func TestParseTextIsNullOperands(t *testing.T) {
+	cases := []string{
+		`deleted_at IS NULL`,
+		`TRUE IS NOT NULL`,
+		`(a = 1) IS NULL`,
+		`(height + 1) IS NOT NULL`,
+	}
+	for _, input := range cases {
+		expr, err := ParseText(input)
+		if err != nil {
+			t.Fatalf("ParseText(%q): %v", input, err)
+		}
+		if _, ok := expr.(*IsNullExpression); !ok {
+			t.Fatalf("%q parsed as %T, want IsNullExpression", input, expr)
+		}
+	}
+}
+
 func TestParseTextBooleanComparisons(t *testing.T) {
 	cases := []string{
 		`active = TRUE`,

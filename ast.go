@@ -151,7 +151,7 @@ func (e *InExpression) Span() Span { return e.Src }
 
 // IsNullExpression represents an IS NULL predicate.
 type IsNullExpression struct {
-	Expr ScalarExpression
+	Expr Node
 	Src  Span
 	Not  bool
 }
