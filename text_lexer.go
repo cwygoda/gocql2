@@ -1,0 +1,288 @@
+package gocql2
+
+import (
+	"fmt"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+type tokenKind int
+
+const (
+	tokenEOF tokenKind = iota
+	tokenIdentifier
+	tokenQuotedIdentifier
+	tokenKeyword
+	tokenString
+	tokenNumber
+	tokenOperator
+	tokenLParen
+	tokenRParen
+	tokenComma
+)
+
+type token struct {
+	text string
+	span Span
+	kind tokenKind
+}
+
+type lexer struct {
+	input      string
+	byteOffset int
+	charOffset int
+	line       int
+	column     int
+}
+
+var reservedTextKeywords = map[string]struct{}{
+	"AND": {}, "OR": {}, "NOT": {}, "LIKE": {}, "BETWEEN": {}, "IN": {}, "IS": {}, "NULL": {}, "TRUE": {}, "FALSE": {},
+	"CASEI": {}, "ACCENTI": {}, "DIV": {}, "DATE": {}, "TIMESTAMP": {}, "INTERVAL": {},
+	"POINT": {}, "LINESTRING": {}, "POLYGON": {}, "MULTIPOINT": {}, "MULTILINESTRING": {}, "MULTIPOLYGON": {}, "GEOMETRYCOLLECTION": {}, "BBOX": {},
+	"S_INTERSECTS": {}, "S_EQUALS": {}, "S_DISJOINT": {}, "S_TOUCHES": {}, "S_WITHIN": {}, "S_OVERLAPS": {}, "S_CROSSES": {}, "S_CONTAINS": {},
+	"T_AFTER": {}, "T_BEFORE": {}, "T_CONTAINS": {}, "T_DISJOINT": {}, "T_DURING": {}, "T_EQUALS": {}, "T_FINISHEDBY": {}, "T_FINISHES": {}, "T_INTERSECTS": {}, "T_MEETS": {}, "T_METBY": {}, "T_OVERLAPPEDBY": {}, "T_OVERLAPS": {}, "T_STARTEDBY": {}, "T_STARTS": {},
+	"A_EQUALS": {}, "A_CONTAINS": {}, "A_CONTAINEDBY": {}, "A_OVERLAPS": {},
+}
+
+var keywordFunctions = map[string]struct{}{
+	"CASEI": {}, "ACCENTI": {}, "DATE": {}, "TIMESTAMP": {}, "INTERVAL": {},
+	"POINT": {}, "LINESTRING": {}, "POLYGON": {}, "MULTIPOINT": {}, "MULTILINESTRING": {}, "MULTIPOLYGON": {}, "GEOMETRYCOLLECTION": {}, "BBOX": {},
+	"S_INTERSECTS": {}, "S_EQUALS": {}, "S_DISJOINT": {}, "S_TOUCHES": {}, "S_WITHIN": {}, "S_OVERLAPS": {}, "S_CROSSES": {}, "S_CONTAINS": {},
+	"T_AFTER": {}, "T_BEFORE": {}, "T_CONTAINS": {}, "T_DISJOINT": {}, "T_DURING": {}, "T_EQUALS": {}, "T_FINISHEDBY": {}, "T_FINISHES": {}, "T_INTERSECTS": {}, "T_MEETS": {}, "T_METBY": {}, "T_OVERLAPPEDBY": {}, "T_OVERLAPS": {}, "T_STARTEDBY": {}, "T_STARTS": {},
+	"A_EQUALS": {}, "A_CONTAINS": {}, "A_CONTAINEDBY": {}, "A_OVERLAPS": {},
+}
+
+func lexText(input string) ([]token, error) {
+	l := &lexer{input: input, line: 1, column: 1}
+	var tokens []token
+	for {
+		tok, err := l.nextToken()
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, tok)
+		if tok.kind == tokenEOF {
+			return tokens, nil
+		}
+	}
+}
+
+func (l *lexer) nextToken() (token, error) {
+	l.skipWhitespace()
+	start := l.location()
+	if l.byteOffset >= len(l.input) {
+		return token{kind: tokenEOF, span: Span{Start: start, End: start}}, nil
+	}
+
+	r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+	switch {
+	case r == '(':
+		l.advance(r, size)
+		return token{kind: tokenLParen, text: "(", span: Span{Start: start, End: l.location()}}, nil
+	case r == ')':
+		l.advance(r, size)
+		return token{kind: tokenRParen, text: ")", span: Span{Start: start, End: l.location()}}, nil
+	case r == ',':
+		l.advance(r, size)
+		return token{kind: tokenComma, text: ",", span: Span{Start: start, End: l.location()}}, nil
+	case r == '\'':
+		return l.stringToken(start)
+	case r == '"':
+		return l.quotedIdentifierToken(start)
+	case isNumberStart(l.input[l.byteOffset:]):
+		return l.numberToken(start)
+	case isIdentifierStart(r):
+		return l.identifierToken(start)
+	case strings.ContainsRune("=<>+-*/%^", r):
+		return l.operatorToken(start)
+	default:
+		return token{}, parseError(LanguageText, start, fmt.Sprintf("unexpected character %q", r))
+	}
+}
+
+func (l *lexer) skipWhitespace() {
+	for l.byteOffset < len(l.input) {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		if !unicode.IsSpace(r) {
+			return
+		}
+		l.advance(r, size)
+	}
+}
+
+func (l *lexer) stringToken(start Location) (token, error) {
+	l.advance('\'', 1)
+	var b strings.Builder
+	for l.byteOffset < len(l.input) {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		if r == '\'' {
+			if strings.HasPrefix(l.input[l.byteOffset:], "''") {
+				b.WriteRune('\'')
+				l.advance('\'', 1)
+				l.advance('\'', 1)
+				continue
+			}
+			l.advance(r, size)
+			return token{kind: tokenString, text: b.String(), span: Span{Start: start, End: l.location()}}, nil
+		}
+		if r == '\\' && strings.HasPrefix(l.input[l.byteOffset:], "\\'") {
+			b.WriteRune('\'')
+			l.advance('\\', 1)
+			l.advance('\'', 1)
+			continue
+		}
+		b.WriteRune(r)
+		l.advance(r, size)
+	}
+	return token{}, parseError(LanguageText, start, "unterminated string literal")
+}
+
+func (l *lexer) quotedIdentifierToken(start Location) (token, error) {
+	l.advance('"', 1)
+	var b strings.Builder
+	for l.byteOffset < len(l.input) {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		if r == '"' {
+			l.advance(r, size)
+			if b.Len() == 0 {
+				return token{}, parseError(LanguageText, start, "quoted identifier must not be empty")
+			}
+			return token{kind: tokenQuotedIdentifier, text: b.String(), span: Span{Start: start, End: l.location()}}, nil
+		}
+		b.WriteRune(r)
+		l.advance(r, size)
+	}
+	return token{}, parseError(LanguageText, start, "unterminated quoted identifier")
+}
+
+func (l *lexer) numberToken(start Location) (token, error) {
+	begin := l.byteOffset
+	if l.peekByte('+') || l.peekByte('-') {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		l.advance(r, size)
+	}
+	seenDigit := false
+	for l.byteOffset < len(l.input) {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		if r < '0' || r > '9' {
+			break
+		}
+		seenDigit = true
+		l.advance(r, size)
+	}
+	if l.peekByte('.') {
+		l.advance('.', 1)
+		for l.byteOffset < len(l.input) {
+			r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+			if r < '0' || r > '9' {
+				break
+			}
+			seenDigit = true
+			l.advance(r, size)
+		}
+	}
+	if !seenDigit {
+		return token{}, parseError(LanguageText, start, "invalid numeric literal")
+	}
+	if l.peekByte('e') || l.peekByte('E') {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		l.advance(r, size)
+		if l.peekByte('+') || l.peekByte('-') {
+			r, size = utf8.DecodeRuneInString(l.input[l.byteOffset:])
+			l.advance(r, size)
+		}
+		expDigits := false
+		for l.byteOffset < len(l.input) {
+			r, size = utf8.DecodeRuneInString(l.input[l.byteOffset:])
+			if r < '0' || r > '9' {
+				break
+			}
+			expDigits = true
+			l.advance(r, size)
+		}
+		if !expDigits {
+			return token{}, parseError(LanguageText, start, "invalid numeric exponent")
+		}
+	}
+	return token{kind: tokenNumber, text: l.input[begin:l.byteOffset], span: Span{Start: start, End: l.location()}}, nil
+}
+
+func (l *lexer) identifierToken(start Location) (token, error) {
+	begin := l.byteOffset
+	for l.byteOffset < len(l.input) {
+		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+		if !isIdentifierPart(r) {
+			break
+		}
+		l.advance(r, size)
+	}
+	text := l.input[begin:l.byteOffset]
+	upper := strings.ToUpper(text)
+	if _, ok := reservedTextKeywords[upper]; ok {
+		return token{kind: tokenKeyword, text: upper, span: Span{Start: start, End: l.location()}}, nil
+	}
+	return token{kind: tokenIdentifier, text: text, span: Span{Start: start, End: l.location()}}, nil
+}
+
+func (l *lexer) operatorToken(start Location) (token, error) {
+	if l.byteOffset+1 <= len(l.input) {
+		for _, op := range []string{"<=", ">=", "<>"} {
+			if strings.HasPrefix(l.input[l.byteOffset:], op) {
+				for _, r := range op {
+					l.advance(r, 1)
+				}
+				return token{kind: tokenOperator, text: op, span: Span{Start: start, End: l.location()}}, nil
+			}
+		}
+	}
+	r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
+	l.advance(r, size)
+	return token{kind: tokenOperator, text: string(r), span: Span{Start: start, End: l.location()}}, nil
+}
+
+func (l *lexer) location() Location {
+	return Location{ByteOffset: l.byteOffset, CharOffset: l.charOffset, Line: l.line, Column: l.column}
+}
+
+func (l *lexer) advance(r rune, size int) {
+	l.byteOffset += size
+	l.charOffset++
+	if r == '\n' {
+		l.line++
+		l.column = 1
+	} else {
+		l.column++
+	}
+}
+
+func (l *lexer) peekByte(b byte) bool {
+	return l.byteOffset < len(l.input) && l.input[l.byteOffset] == b
+}
+
+func isNumberStart(s string) bool {
+	if s == "" {
+		return false
+	}
+	if s[0] >= '0' && s[0] <= '9' {
+		return true
+	}
+	if s[0] == '.' {
+		return len(s) > 1 && s[1] >= '0' && s[1] <= '9'
+	}
+	if s[0] == '+' || s[0] == '-' {
+		if len(s) < 2 {
+			return false
+		}
+		return s[1] >= '0' && s[1] <= '9' || s[1] == '.' && len(s) > 2 && s[2] >= '0' && s[2] <= '9'
+	}
+	return false
+}
+
+func isIdentifierStart(r rune) bool {
+	return r == '_' || r == ':' || unicode.IsLetter(r)
+}
+
+func isIdentifierPart(r rune) bool {
+	return isIdentifierStart(r) || unicode.IsDigit(r) || r == '.' || r == '\u203f' || r == '\u2040'
+}
