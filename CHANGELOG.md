@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.0 - 2026-06-01
+#### Features
+- add CQL2 array predicates - (ac4bf8d) - Christian Wygoda
+
+- - -
+
 ## v0.2.0 - 2026-06-01
 #### Features
 - expose standard text functions - (cf9f954) - Christian Wygoda
