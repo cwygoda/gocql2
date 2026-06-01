@@ -124,11 +124,11 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if !isCharacterExpression(left) {
 			return nil, parseError(LanguageText, left.Span().Start, "LIKE left operand must be a character expression")
 		}
-		pattern, modifier, err := p.parsePattern(depth + 1)
+		pattern, err := p.parsePattern(depth + 1)
 		if err != nil {
 			return nil, err
 		}
-		return &LikeExpression{Expr: left, Pattern: pattern, Not: not, Modifier: modifier, Src: Span{Start: left.Span().Start, End: pattern.Span().End}}, nil
+		return &LikeExpression{Expr: left, Pattern: pattern, Not: not, Src: Span{Start: left.Span().Start, End: pattern.Span().End}}, nil
 	}
 	if p.matchKeyword("BETWEEN") {
 		if !isNumericExpression(left) {
@@ -216,44 +216,47 @@ func scalarAsExpression(scalar ScalarExpression) (Expression, bool) {
 	return expr, ok
 }
 
-func (p *textParser) parsePattern(depth int) (ScalarExpression, string, error) {
+func (p *textParser) parsePattern(depth int) (ScalarExpression, error) {
 	if nameTok, ok := p.consumeKeyword("CASEI"); ok {
 		if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		inner, _, err := p.parsePattern(depth + 1)
+		inner, err := p.parsePattern(depth + 1)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
-			return nil, "", err
+		end, err := p.expect(tokenRParen, "closing parenthesis")
+		if err != nil {
+			return nil, err
 		}
-		if _, err := validateFunctionCall("casei", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start); err != nil {
-			return nil, "", err
+		def, err := validateFunctionCall("casei", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start)
+		if err != nil {
+			return nil, err
 		}
-		return inner, "casei", nil
+		return &FunctionCall{Name: FunctionNameCaseI, Args: []Node{inner}, ReturnTypes: cloneFunctionTypes(def.Returns), Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 	}
 	if nameTok, ok := p.consumeKeyword("ACCENTI"); ok {
 		if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		inner, _, err := p.parsePattern(depth + 1)
+		inner, err := p.parsePattern(depth + 1)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
-			return nil, "", err
+		end, err := p.expect(tokenRParen, "closing parenthesis")
+		if err != nil {
+			return nil, err
 		}
-		if _, err := validateFunctionCall("accenti", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start); err != nil {
-			return nil, "", err
+		def, err := validateFunctionCall("accenti", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start)
+		if err != nil {
+			return nil, err
 		}
-		return inner, "accenti", nil
+		return &FunctionCall{Name: FunctionNameAccenti, Args: []Node{inner}, ReturnTypes: cloneFunctionTypes(def.Returns), Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 	}
 	if !p.at(tokenString, "") {
-		return nil, "", p.errorHere("LIKE pattern must be a character literal", "string literal", "CASEI", "ACCENTI")
+		return nil, p.errorHere("LIKE pattern must be a character literal", "string literal", "CASEI", "ACCENTI")
 	}
-	scalar, err := p.parseScalar(depth + 1)
-	return scalar, "", err
+	return p.parseScalar(depth + 1)
 }
 
 func (p *textParser) parseNumericExpression(depth int) (ScalarExpression, error) {

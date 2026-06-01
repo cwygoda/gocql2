@@ -147,11 +147,11 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if err != nil {
 			return nil, err
 		}
-		pattern, modifier, err := parseJSONPatternExpression(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
+		pattern, err := parseJSONPatternExpression(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
 		if err != nil {
 			return nil, err
 		}
-		return &LikeExpression{Expr: expr, Pattern: pattern, Modifier: modifier, Src: src}, nil
+		return &LikeExpression{Expr: expr, Pattern: pattern, Src: src}, nil
 	case "between":
 		if len(op.Args) != 3 {
 			return nil, jsonPathError(path.Key("args"), "expected exactly 3 arguments")
@@ -314,38 +314,39 @@ func parseJSONCharacterExpression(raw json.RawMessage, path JSONPath, depth int,
 	return fn, nil
 }
 
-func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, string, error) {
+func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {
 	if depth > cfg.MaxDepth {
-		return nil, "", jsonPathError(path, "maximum parse depth exceeded")
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
 	}
 	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		if lit.Kind != LiteralString {
-			return nil, "", jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
+			return nil, jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
 		}
-		return lit, "", nil
+		return lit, nil
 	}
 
 	op, err := parseJSONOpObject(raw, path)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if op.Op != "casei" && op.Op != "accenti" {
-		return nil, "", jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
+		return nil, jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
 	}
 	if len(op.Args) != 1 {
-		return nil, "", jsonPathError(path.Key("args"), "expected exactly one argument")
+		return nil, jsonPathError(path.Key("args"), "expected exactly one argument")
 	}
-	pattern, _, err := parseJSONPatternExpression(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
+	pattern, err := parseJSONPatternExpression(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	if _, err := validateFunctionCall(op.Op, []Node{pattern}, cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("op")}); err != nil {
-		return nil, "", err
+	def, err := validateFunctionCall(op.Op, []Node{pattern}, cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("op")})
+	if err != nil {
+		return nil, err
 	}
-	return pattern, op.Op, nil
+	return &FunctionCall{Name: normalizeFunctionName(op.Op), Args: []Node{pattern}, ReturnTypes: cloneFunctionTypes(def.Returns), Src: jsonSpan(path)}, nil
 }
 
 func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {

@@ -260,7 +260,7 @@ func semantic(node Node) any {
 	case *ArithmeticExpression:
 		return map[string]any{"type": "arithmetic", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
 	case *LikeExpression:
-		return map[string]any{"type": "like", "expr": semantic(n.Expr), "pattern": semantic(n.Pattern), "not": n.Not, "modifier": n.Modifier}
+		return map[string]any{"type": "like", "expr": semantic(n.Expr), "pattern": semantic(n.Pattern), "not": n.Not}
 	case *BetweenExpression:
 		return map[string]any{"type": "between", "expr": semantic(n.Expr), "lower": semantic(n.Lower), "upper": semantic(n.Upper), "not": n.Not}
 	case *InExpression:
