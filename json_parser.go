@@ -26,6 +26,7 @@ var reservedJSONOps = map[string]struct{}{
 }
 
 func parseJSON(input []byte, cfg ParseConfig) (Expression, error) {
+	cfg = applyParseConfigDefaults(cfg)
 	dec := json.NewDecoder(bytes.NewReader(input))
 	dec.UseNumber()
 
@@ -146,7 +147,7 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if err != nil {
 			return nil, err
 		}
-		pattern, modifier, err := parseJSONPatternExpression(op.Args[1], path.Key("args").Index(1), depth+1)
+		pattern, modifier, err := parseJSONPatternExpression(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +196,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if _, reserved := reservedJSONOps[op.Op]; reserved {
 			return nil, jsonPathError(path.Key("op"), fmt.Sprintf("unsupported reserved operation %q", op.Op))
 		}
-		return parseJSONFunction(op.Op, op.Args, path, depth, cfg)
+		fn, err := parseJSONFunction(op.Op, op.Args, path, depth, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if !functionCallReturns(fn, FunctionTypeBoolean) {
+			return nil, jsonPathError(path.Key("op"), fmt.Sprintf("function %q does not return boolean", fn.Name))
+		}
+		return fn, nil
 	}
 }
 
@@ -296,10 +304,20 @@ func parseJSONCharacterExpression(raw json.RawMessage, path JSONPath, depth int,
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a character function", op.Op))
 	}
-	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+	fn, err := parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if !isCharacterExpression(fn) {
+		return nil, jsonPathError(path, "expected character expression")
+	}
+	return fn, nil
 }
 
-func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int) (ScalarExpression, string, error) {
+func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, string, error) {
+	if depth > cfg.MaxDepth {
+		return nil, "", jsonPathError(path, "maximum parse depth exceeded")
+	}
 	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
 		if err != nil {
 			return nil, "", err
@@ -320,8 +338,11 @@ func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int) (
 	if len(op.Args) != 1 {
 		return nil, "", jsonPathError(path.Key("args"), "expected exactly one argument")
 	}
-	pattern, _, err := parseJSONPatternExpression(op.Args[0], path.Key("args").Index(0), depth+1)
+	pattern, _, err := parseJSONPatternExpression(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
 	if err != nil {
+		return nil, "", err
+	}
+	if _, err := validateFunctionCall(op.Op, []Node{pattern}, cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("op")}); err != nil {
 		return nil, "", err
 	}
 	return pattern, op.Op, nil
@@ -366,7 +387,14 @@ func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, c
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a numeric function", op.Op))
 	}
-	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+	fn, err := parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if !isNumericExpression(fn) {
+		return nil, jsonPathError(path, "expected numeric expression")
+	}
+	return fn, nil
 }
 
 func parseJSONArithmeticExpression(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*ArithmeticExpression, error) {
@@ -401,7 +429,11 @@ func parseJSONCharacterFunction(name string, rawArgs []json.RawMessage, path JSO
 	if err != nil {
 		return nil, err
 	}
-	return &FunctionCall{Name: name, Args: []Node{arg}, Src: jsonSpan(path)}, nil
+	def, err := validateFunctionCall(name, []Node{arg}, cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("op")})
+	if err != nil {
+		return nil, err
+	}
+	return &FunctionCall{Name: normalizeFunctionName(name), Args: []Node{arg}, ReturnTypes: cloneFunctionTypes(def.Returns), Src: jsonSpan(path)}, nil
 }
 
 func parseJSONFunction(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*FunctionCall, error) {
@@ -413,7 +445,11 @@ func parseJSONFunction(name string, rawArgs []json.RawMessage, path JSONPath, de
 		}
 		args = append(args, node)
 	}
-	return &FunctionCall{Name: name, Args: args, Src: jsonSpan(path)}, nil
+	def, err := validateFunctionCall(name, args, cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("op")})
+	if err != nil {
+		return nil, err
+	}
+	return &FunctionCall{Name: normalizeFunctionName(name), Args: args, ReturnTypes: cloneFunctionTypes(def.Returns), Src: jsonSpan(path)}, nil
 }
 
 func parseJSONNode(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {

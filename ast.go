@@ -198,9 +198,10 @@ func (l *Literal) Span() Span { return l.Src }
 // FunctionCall represents a CQL2 function reference. It may appear as either a
 // scalar expression or a boolean expression, depending on the function.
 type FunctionCall struct {
-	Name string
-	Args []Node
-	Src  Span
+	Name        string
+	Args        []Node
+	ReturnTypes []FunctionType
+	Src         Span
 }
 
 func (*FunctionCall) expressionNode() {}

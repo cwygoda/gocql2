@@ -12,6 +12,7 @@ type textParser struct {
 }
 
 func parseText(input string, cfg ParseConfig) (Expression, error) {
+	cfg = applyParseConfigDefaults(cfg)
 	tokens, err := lexText(input)
 	if err != nil {
 		return nil, err
@@ -205,12 +206,18 @@ func scalarAsExpression(scalar ScalarExpression) (Expression, bool) {
 		}
 		return nil, false
 	}
+	if fn, ok := scalar.(*FunctionCall); ok {
+		if functionCallReturns(fn, FunctionTypeBoolean) {
+			return fn, true
+		}
+		return nil, false
+	}
 	expr, ok := scalar.(Expression)
 	return expr, ok
 }
 
 func (p *textParser) parsePattern(depth int) (ScalarExpression, string, error) {
-	if _, ok := p.consumeKeyword("CASEI"); ok {
+	if nameTok, ok := p.consumeKeyword("CASEI"); ok {
 		if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
 			return nil, "", err
 		}
@@ -219,11 +226,14 @@ func (p *textParser) parsePattern(depth int) (ScalarExpression, string, error) {
 			return nil, "", err
 		}
 		if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
+			return nil, "", err
+		}
+		if _, err := validateFunctionCall("casei", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start); err != nil {
 			return nil, "", err
 		}
 		return inner, "casei", nil
 	}
-	if _, ok := p.consumeKeyword("ACCENTI"); ok {
+	if nameTok, ok := p.consumeKeyword("ACCENTI"); ok {
 		if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
 			return nil, "", err
 		}
@@ -232,6 +242,9 @@ func (p *textParser) parsePattern(depth int) (ScalarExpression, string, error) {
 			return nil, "", err
 		}
 		if _, err := p.expect(tokenRParen, "closing parenthesis"); err != nil {
+			return nil, "", err
+		}
+		if _, err := validateFunctionCall("accenti", []Node{inner}, p.cfg, LanguageText, nameTok.span.Start); err != nil {
 			return nil, "", err
 		}
 		return inner, "accenti", nil
@@ -404,7 +417,12 @@ func (p *textParser) finishFunction(nameTok token, depth int) (*FunctionCall, er
 	if err != nil {
 		return nil, err
 	}
-	return &FunctionCall{Name: strings.ToLower(nameTok.text), Args: args, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
+	name := strings.ToLower(nameTok.text)
+	def, err := validateFunctionCall(name, args, p.cfg, LanguageText, nameTok.span.Start)
+	if err != nil {
+		return nil, err
+	}
+	return &FunctionCall{Name: name, Args: args, ReturnTypes: cloneFunctionTypes(def.Returns), Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 }
 
 func (p *textParser) parseFunctionArg(depth int) (Node, error) {
