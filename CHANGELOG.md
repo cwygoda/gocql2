@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.2.0 - 2026-06-01
+#### Features
+- expose standard text functions - (cf9f954) - Christian Wygoda
+- add function registry - (7c82f1a) - Christian Wygoda
+#### Refactoring
+- represent like modifiers as functions - (8a12315) - Christian Wygoda
+#### Miscellaneous Chores
+- ignore generated changelog in markdownlint - (f8f5082) - Christian Wygoda
+
+- - -
+
 ## v0.1.0 - 2026-06-01
 #### Features
 - (**parser**) add allowed property registry - (0a85ceb) - Christian Wygoda
