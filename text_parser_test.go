@@ -121,6 +121,70 @@ func TestParseTextInLists(t *testing.T) {
 	assertParseErrorContains(t, err, "NULL is only allowed")
 }
 
+func TestParseTextArrayPredicates(t *testing.T) {
+	cases := []struct {
+		input string
+		op    ArrayPredicateOp
+	}{
+		{input: `A_CONTAINS(tags, ('foo', 'bar'))`, op: ArrayOpContains},
+		{input: `A_CONTAINEDBY((), tags)`, op: ArrayOpContainedBy},
+		{input: `A_EQUALS(tags, (1, 2 + count, TRUE))`, op: ArrayOpEquals},
+		{input: `A_OVERLAPS(get_tags(), (('nested'), status = 'new'))`, op: ArrayOpOverlaps},
+	}
+	parser := NewParser(WithAllowedFunctions(FunctionDefinition{
+		Name:    "get_tags",
+		Returns: []FunctionType{FunctionTypeArray},
+	}))
+	for _, tc := range cases {
+		expr, err := parser.ParseText(tc.input)
+		if err != nil {
+			t.Fatalf("ParseText(%q): %v", tc.input, err)
+		}
+		array, ok := expr.(*ArrayPredicateExpression)
+		if !ok || array.Op != tc.op {
+			t.Fatalf("%q parsed as %#v, want array predicate %s", tc.input, expr, tc.op)
+		}
+		if array.Span().Start.Line != 1 {
+			t.Fatalf("Span().Start.Line = %d, want 1", array.Span().Start.Line)
+		}
+	}
+
+	_, err := ParseText(`A_CONTAINS(name, ('foo'))`, WithAllowedProperties(
+		PropertyDefinition{Name: "name", Type: PropertyTypeString},
+	))
+	assertParseErrorContains(t, err, `cannot be used as an array operand`)
+
+	_, err = ParseText(`A_CONTAINS(tags, 'foo')`)
+	assertParseErrorContains(t, err, `expected array operand`)
+
+	_, err = ParseText(`A_CONTAINS(tags, name)`, WithAllowedProperties(
+		PropertyDefinition{Name: "tags", Type: PropertyTypeArray},
+		PropertyDefinition{Name: "name", Type: PropertyTypeString},
+	))
+	assertParseErrorContains(t, err, `cannot be used as an array operand`)
+
+	_, err = ParseText(`A_CONTAINS`)
+	assertParseErrorContains(t, err, `opening parenthesis`)
+
+	_, err = ParseText(`A_CONTAINS(tags ('foo'))`)
+	assertParseErrorContains(t, err, `function "tags" is not allowed`)
+
+	_, err = ParseText(`A_CONTAINS(tags, ('foo')`)
+	assertParseErrorContains(t, err, `closing parenthesis`)
+
+	_, err = ParseText(`A_CONTAINS(tags, )`)
+	assertParseErrorContains(t, err, `expected scalar expression`)
+
+	_, err = ParseText(`A_CONTAINS(tags, bad_fn())`, WithAllowedFunctions(FunctionDefinition{
+		Name:    "bad_fn",
+		Returns: []FunctionType{FunctionTypeString},
+	}))
+	assertParseErrorContains(t, err, `does not return array`)
+
+	_, err = ParseText(`A_CONTAINS(tags, ((('foo'))))`, WithMaxDepth(3))
+	assertParseErrorContains(t, err, `maximum parse depth exceeded`)
+}
+
 func TestParseTextBetweenNumericExpressions(t *testing.T) {
 	cases := []string{
 		`height BETWEEN 1 AND 2`,
@@ -284,6 +348,40 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 
 	_, err = ParseText(`contains_any(name, 1)`, WithAllowedFunctions(boolFn))
 	assertParseErrorContains(t, err, `expected string`)
+
+	groupedBoolFn := FunctionDefinition{
+		Name:    "accept_bool",
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeBoolean}}},
+		Returns: []FunctionType{FunctionTypeBoolean},
+	}
+	expr, err = ParseText(`accept_bool((a = 1))`, WithAllowedFunctions(groupedBoolFn))
+	if err != nil {
+		t.Fatalf("ParseText grouped boolean function argument: %v", err)
+	}
+	fn, ok = expr.(*FunctionCall)
+	if !ok || len(fn.Args) != 1 {
+		t.Fatalf("expr = %#v, want function with one argument", expr)
+	}
+	if _, comparisonOK := fn.Args[0].(*ComparisonExpression); !comparisonOK {
+		t.Fatalf("arg = %T, want grouped boolean expression", fn.Args[0])
+	}
+
+	arrayFn := FunctionDefinition{
+		Name:    "accept_array",
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeArray}}},
+		Returns: []FunctionType{FunctionTypeBoolean},
+	}
+	expr, err = ParseText(`accept_array(('a', 'b'))`, WithAllowedFunctions(arrayFn))
+	if err != nil {
+		t.Fatalf("ParseText array function argument: %v", err)
+	}
+	fn, ok = expr.(*FunctionCall)
+	if !ok || len(fn.Args) != 1 {
+		t.Fatalf("expr = %#v, want function with one argument", expr)
+	}
+	if _, ok := fn.Args[0].(*ArrayLiteral); !ok {
+		t.Fatalf("arg = %T, want array literal", fn.Args[0])
+	}
 }
 
 func TestParseTextRejectsInvalidOperandShapes(t *testing.T) {

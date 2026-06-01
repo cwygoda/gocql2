@@ -159,6 +159,29 @@ func (*IsNullExpression) expressionNode() {}
 
 func (e *IsNullExpression) Span() Span { return e.Src }
 
+// ArrayPredicateOp is a standardized array comparison operation.
+type ArrayPredicateOp string
+
+// Supported array predicate operators.
+const (
+	ArrayOpContains    ArrayPredicateOp = "a_contains"
+	ArrayOpContainedBy ArrayPredicateOp = "a_containedby"
+	ArrayOpEquals      ArrayPredicateOp = "a_equals"
+	ArrayOpOverlaps    ArrayPredicateOp = "a_overlaps"
+)
+
+// ArrayPredicateExpression compares two array-valued operands.
+type ArrayPredicateExpression struct {
+	Op    ArrayPredicateOp
+	Left  Node
+	Right Node
+	Src   Span
+}
+
+func (*ArrayPredicateExpression) expressionNode() {}
+
+func (e *ArrayPredicateExpression) Span() Span { return e.Src }
+
 // PropertyRef references a feature property.
 type PropertyRef struct {
 	Name string

@@ -169,6 +169,41 @@ func validateInOperands(expr ScalarExpression, values []ScalarExpression, source
 	return nil
 }
 
+func validateArrayPredicateOperands(left, right Node, source Language) error {
+	if err := validateArrayOperand(left, source); err != nil {
+		return err
+	}
+	return validateArrayOperand(right, source)
+}
+
+func validateArrayOperand(node Node, source Language) error {
+	switch value := node.(type) {
+	case *ArrayLiteral:
+		return nil
+	case *PropertyRef:
+		if value.Type == PropertyTypeAny || value.Type == PropertyTypeArray {
+			return nil
+		}
+		return parseError(source, value.Span().Start, fmt.Sprintf("property %q of type %q cannot be used as an array operand", value.Name, value.Type))
+	case *FunctionCall:
+		if functionCallReturns(value, FunctionTypeArray) || functionCallReturnsExact(value, FunctionTypeAny) {
+			return nil
+		}
+		return parseError(source, value.Span().Start, fmt.Sprintf("function %q does not return array", value.Name))
+	default:
+		return parseError(source, node.Span().Start, "expected array operand", "array", "array property", "array function")
+	}
+}
+
+func functionCallReturnsExact(call *FunctionCall, typ FunctionType) bool {
+	for _, ret := range call.ReturnTypes {
+		if ret == typ {
+			return true
+		}
+	}
+	return false
+}
+
 func scalarExpressionType(scalar ScalarExpression) PropertyType {
 	switch value := scalar.(type) {
 	case *Literal:

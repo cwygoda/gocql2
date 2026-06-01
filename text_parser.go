@@ -85,6 +85,12 @@ func (p *textParser) parseNot(depth int) (Expression, error) {
 }
 
 func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
+	if p.peek().kind == tokenKeyword {
+		if op, ok := isArrayPredicateOp(p.peek().text); ok {
+			return p.parseArrayPredicate(op, depth+1)
+		}
+	}
+
 	if p.at(tokenLParen, "") {
 		startPos := p.pos
 		p.advance()
@@ -428,12 +434,100 @@ func (p *textParser) finishFunction(nameTok token, depth int) (*FunctionCall, er
 	return &FunctionCall{Name: name, Args: args, ReturnTypes: cloneFunctionTypes(def.Returns), Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 }
 
+func (p *textParser) parseArrayPredicate(op ArrayPredicateOp, depth int) (*ArrayPredicateExpression, error) {
+	nameTok := p.advance()
+	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
+		return nil, err
+	}
+	left, err := p.parseArrayOperand(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	if _, expectErr := p.expect(tokenComma, "comma"); expectErr != nil {
+		return nil, expectErr
+	}
+	right, err := p.parseArrayOperand(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	end, err := p.expect(tokenRParen, "closing parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateArrayPredicateOperands(left, right, LanguageText); err != nil {
+		return nil, err
+	}
+	return &ArrayPredicateExpression{Op: op, Left: left, Right: right, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
+}
+
+func (p *textParser) parseArrayOperand(depth int) (Node, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	if p.at(tokenLParen, "") {
+		return p.parseArrayLiteral(depth + 1)
+	}
+
+	node, err := p.parseScalarPrimary(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (p *textParser) parseArrayLiteral(depth int) (*ArrayLiteral, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	start, err := p.expect(tokenLParen, "opening parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	values := []Node{}
+	if !p.at(tokenRParen, "") {
+		for {
+			value, valueErr := p.parseArrayElement(depth + 1)
+			if valueErr != nil {
+				return nil, valueErr
+			}
+			values = append(values, value)
+			if !p.match(tokenComma, "") {
+				break
+			}
+		}
+	}
+	end, err := p.expect(tokenRParen, "closing parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	return &ArrayLiteral{Values: values, Src: Span{Start: start.span.Start, End: end.span.End}}, nil
+}
+
+func (p *textParser) parseArrayElement(depth int) (Node, error) {
+	if p.at(tokenLParen, "") {
+		return p.parseArrayLiteral(depth + 1)
+	}
+	start := p.pos
+	if expr, err := p.parseExpression(depth + 1); err == nil {
+		return expr, nil
+	}
+	p.pos = start
+	return p.parseScalar(depth + 1)
+}
+
 func (p *textParser) parseFunctionArg(depth int) (Node, error) {
 	start := p.pos
 	if expr, err := p.parseExpression(depth + 1); err == nil {
 		return expr, nil
 	}
 	p.pos = start
+	if scalar, err := p.parseScalar(depth + 1); err == nil {
+		return scalar, nil
+	}
+	p.pos = start
+	if p.at(tokenLParen, "") {
+		return p.parseArrayLiteral(depth + 1)
+	}
 	return p.parseScalar(depth + 1)
 }
 

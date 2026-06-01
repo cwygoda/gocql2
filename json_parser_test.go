@@ -64,6 +64,55 @@ func TestParseJSONInLists(t *testing.T) {
 	assertParseErrorContains(t, err, "NULL is only allowed")
 }
 
+func TestParseJSONArrayPredicates(t *testing.T) {
+	cases := []struct {
+		input string
+		op    ArrayPredicateOp
+	}{
+		{input: `{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`, op: ArrayOpContains},
+		{input: `{"op":"a_containedby","args":[[],{"property":"tags"}]}`, op: ArrayOpContainedBy},
+		{input: `{"op":"a_equals","args":[{"property":"tags"},[1,{"op":"+","args":[2,3]},true]]}`, op: ArrayOpEquals},
+		{input: `{"op":"a_overlaps","args":[{"op":"get_tags","args":[]},[["nested"],{"op":"=","args":[{"property":"status"},"new"]}]]}`, op: ArrayOpOverlaps},
+	}
+	parser := NewParser(WithAllowedFunctions(FunctionDefinition{
+		Name:    "get_tags",
+		Returns: []FunctionType{FunctionTypeArray},
+	}))
+	for _, tc := range cases {
+		expr, err := parser.ParseJSON([]byte(tc.input))
+		if err != nil {
+			t.Fatalf("ParseJSON(%s): %v", tc.input, err)
+		}
+		array, ok := expr.(*ArrayPredicateExpression)
+		if !ok || array.Op != tc.op {
+			t.Fatalf("%s parsed as %#v, want array predicate %s", tc.input, expr, tc.op)
+		}
+	}
+
+	_, err := ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`), WithAllowedProperties(
+		PropertyDefinition{Name: "name", Type: PropertyTypeString},
+	))
+	assertParseErrorContains(t, err, `cannot be used as an array operand`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"tags"},"foo"]}`))
+	assertParseErrorContains(t, err, `expected array operand`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[]]}`))
+	assertParseErrorContains(t, err, `expected exactly 2 arguments`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{},[]]}`))
+	assertParseErrorContains(t, err, `expected scalar expression`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[],{"op":"bad_fn","args":[]}]}`), WithAllowedFunctions(FunctionDefinition{
+		Name:    "bad_fn",
+		Returns: []FunctionType{FunctionTypeString},
+	}))
+	assertParseErrorContains(t, err, `does not return array`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[["foo"]],[]]}`), WithMaxDepth(1))
+	assertParseErrorContains(t, err, `maximum parse depth exceeded`)
+}
+
 func TestParseJSONBetweenNumericExpressions(t *testing.T) {
 	cases := []string{
 		`{"op":"between","args":[{"property":"height"},1,2]}`,
