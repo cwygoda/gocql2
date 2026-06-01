@@ -133,7 +133,11 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if err != nil {
 			return nil, err
 		}
-		return &ComparisonExpression{Op: comparisonOps[op.Op], Left: args[0], Right: args[1], Src: src}, nil
+		cmpOp := comparisonOps[op.Op]
+		if err := validateComparisonOperands(cmpOp, args[0], args[1], LanguageJSON); err != nil {
+			return nil, err
+		}
+		return &ComparisonExpression{Op: cmpOp, Left: args[0], Right: args[1], Src: src}, nil
 	case "like":
 		if len(op.Args) != 2 {
 			return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
@@ -170,6 +174,9 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		}
 		values, err := parseJSONScalarArray(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
 		if err != nil {
+			return nil, err
+		}
+		if err := validateInOperands(expr, values, LanguageJSON); err != nil {
 			return nil, err
 		}
 		return &InExpression{Expr: expr, Values: values, Src: src}, nil
@@ -228,7 +235,7 @@ func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseCon
 		if name == "" {
 			return nil, jsonPathError(path.Key("property"), "property name must not be empty")
 		}
-		return &PropertyRef{Name: name, Src: jsonSpan(path)}, nil
+		return propertyRef(name, jsonSpan(path), cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("property")})
 	}
 
 	op, err := parseJSONOpObject(raw, path)
@@ -266,7 +273,14 @@ func parseJSONCharacterExpression(raw json.RawMessage, path JSONPath, depth int,
 		return nil, err
 	}
 	if _, ok := obj["property"]; ok {
-		return parseJSONScalar(raw, path, depth+1, cfg)
+		scalar, err := parseJSONScalar(raw, path, depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if !isCharacterExpression(scalar) {
+			return nil, jsonPathError(path, "expected character expression")
+		}
+		return scalar, nil
 	}
 
 	op, err := parseJSONOpObject(raw, path)
@@ -329,7 +343,14 @@ func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, c
 		return nil, err
 	}
 	if _, ok := obj["property"]; ok {
-		return parseJSONScalar(raw, path, depth+1, cfg)
+		scalar, err := parseJSONScalar(raw, path, depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if !isNumericExpression(scalar) {
+			return nil, jsonPathError(path, "expected numeric expression")
+		}
+		return scalar, nil
 	}
 
 	op, err := parseJSONOpObject(raw, path)

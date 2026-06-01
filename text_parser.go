@@ -7,8 +7,8 @@ import (
 
 type textParser struct {
 	tokens []token
-	pos    int
 	cfg    ParseConfig
+	pos    int
 }
 
 func parseText(input string, cfg ParseConfig) (Expression, error) {
@@ -110,7 +110,11 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ComparisonExpression{Op: ComparisonOp(opTok.text), Left: left, Right: right, Src: Span{Start: left.Span().Start, End: right.Span().End}}, nil
+		op := ComparisonOp(opTok.text)
+		if err := validateComparisonOperands(op, left, right, LanguageText); err != nil {
+			return nil, err
+		}
+		return &ComparisonExpression{Op: op, Left: left, Right: right, Src: Span{Start: left.Span().Start, End: right.Span().End}}, nil
 	}
 
 	not := p.matchKeyword("NOT")
@@ -165,6 +169,9 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		}
 		if len(values) == 0 {
 			return nil, parseError(LanguageText, end.span.Start, "IN list must not be empty")
+		}
+		if err := validateInOperands(left, values, LanguageText); err != nil {
+			return nil, err
 		}
 		return &InExpression{Expr: left, Values: values, Not: not, Src: Span{Start: left.Span().Start, End: end.span.End}}, nil
 	}
@@ -247,28 +254,6 @@ func (p *textParser) parseNumericExpression(depth int) (ScalarExpression, error)
 	return scalar, nil
 }
 
-func isCharacterExpression(scalar ScalarExpression) bool {
-	switch value := scalar.(type) {
-	case *Literal:
-		return value.Kind == LiteralString
-	case *PropertyRef, *FunctionCall:
-		return true
-	default:
-		return false
-	}
-}
-
-func isNumericExpression(scalar ScalarExpression) bool {
-	switch value := scalar.(type) {
-	case *Literal:
-		return value.Kind == LiteralNumber
-	case *PropertyRef, *FunctionCall, *ArithmeticExpression:
-		return true
-	default:
-		return false
-	}
-}
-
 func (p *textParser) parseScalar(depth int) (ScalarExpression, error) {
 	return p.parseArithmeticExpression(depth+1, 0)
 }
@@ -329,7 +314,7 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 		if p.match(tokenLParen, "") {
 			return p.finishFunction(tok, depth+1)
 		}
-		return &PropertyRef{Name: tok.text, Src: tok.span}, nil
+		return propertyRef(tok.text, tok.span, p.cfg, LanguageText, tok.span.Start)
 	case tokenKeyword:
 		if tok.text == "TRUE" || tok.text == "FALSE" {
 			p.advance()

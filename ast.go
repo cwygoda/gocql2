@@ -163,6 +163,7 @@ func (e *IsNullExpression) Span() Span { return e.Src }
 // PropertyRef references a feature property.
 type PropertyRef struct {
 	Name string
+	Type PropertyType
 	Src  Span
 }
 
