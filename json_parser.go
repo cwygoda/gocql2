@@ -174,11 +174,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		}
 		return &InExpression{Expr: expr, Values: values, Src: src}, nil
 	case "isNull":
-		args, err := parseJSONScalarArgs(op.Args, path.Key("args"), depth, cfg, 1, 1)
+		if len(op.Args) != 1 {
+			return nil, jsonPathError(path.Key("args"), "expected exactly 1 arguments")
+		}
+		operand, err := parseJSONIsNullOperand(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
 		if err != nil {
 			return nil, err
 		}
-		return &IsNullExpression{Expr: args[0], Src: src}, nil
+		return &IsNullExpression{Expr: operand, Src: src}, nil
 	case "casei", "accenti":
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("%q is not a boolean expression", op.Op))
 	default:
@@ -187,6 +190,16 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		}
 		return parseJSONFunction(op.Op, op.Args, path, depth, cfg)
 	}
+}
+
+func parseJSONIsNullOperand(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
+	if expr, err := parseJSONExpression(raw, path, depth, cfg); err == nil {
+		return expr, nil
+	}
+	if scalar, err := parseJSONScalar(raw, path, depth, cfg); err == nil {
+		return scalar, nil
+	}
+	return nil, jsonPathError(path, "expected IS NULL operand")
 }
 
 func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {
