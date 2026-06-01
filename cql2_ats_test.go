@@ -2,7 +2,6 @@ package gocql2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"sync"
@@ -18,6 +17,8 @@ type cql2AbstractTest struct {
 
 type cql2ATSSuite struct {
 	executeErr error
+	parseErr   error
+	parsed     Expression
 	current    cql2AbstractTest
 
 	total              int
@@ -26,8 +27,9 @@ type cql2ATSSuite struct {
 	unexpectedPasses   int
 	unexpectedFailures int
 
-	mu           sync.Mutex
-	expectedFail bool
+	mu             sync.Mutex
+	expectedFail   bool
+	executedByStep bool
 }
 
 func TestCQL2AbstractTestSuite(t *testing.T) {
@@ -65,20 +67,26 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 		s.current = cql2AbstractTestFromScenario(sc)
 		s.executeErr = nil
+		s.parseErr = nil
+		s.parsed = nil
 		s.expectedFail = scenarioHasTag(sc, "@expected-fail")
+		s.executedByStep = false
 		return ctx, nil
 	})
 
 	ctx.After(func(ctx context.Context, sc *godog.Scenario, stepErr error) (context.Context, error) {
 		if stepErr != nil {
-			return ctx, stepErr
+			s.executeErr = stepErr
+		} else if !s.executedByStep {
+			s.executeErr = fmt.Errorf("CQL2 abstract test execution is not implemented for %s", s.current.ID)
 		}
-
-		s.executeErr = executeCQL2AbstractTest(ctx, s.current)
 		return ctx, s.recordAbstractTestResult()
 	})
 
-	ctx.Step(`^.*$`, s.theATSStepIsDocumented)
+	ctx.Step(`^I parse the CQL2 Text filter "([^"]*)"$`, s.iParseTheCQL2TextFilter)
+	ctx.Step(`^I parse the CQL2 JSON filter:$`, s.iParseTheCQL2JSONFilter)
+	ctx.Step(`^parsing succeeds$`, s.parsingSucceeds)
+	ctx.Step(`^the comparison right literal is "([^"]*)"$`, s.theComparisonRightLiteralIs)
 }
 
 func scenarioHasTag(sc *godog.Scenario, tag string) bool {
@@ -101,7 +109,39 @@ func cql2AbstractTestFromScenario(sc *godog.Scenario) cql2AbstractTest {
 	return cql2AbstractTest{Section: matches[1], ID: matches[2]}
 }
 
-func (s *cql2ATSSuite) theATSStepIsDocumented() error {
+func (s *cql2ATSSuite) iParseTheCQL2TextFilter(filter string) error {
+	s.executedByStep = true
+	s.parsed, s.parseErr = ParseText(filter)
+	return nil
+}
+
+func (s *cql2ATSSuite) iParseTheCQL2JSONFilter(doc *godog.DocString) error {
+	s.executedByStep = true
+	s.parsed, s.parseErr = ParseJSON([]byte(doc.Content))
+	return nil
+}
+
+func (s *cql2ATSSuite) parsingSucceeds() error {
+	s.executedByStep = true
+	return s.parseErr
+}
+
+func (s *cql2ATSSuite) theComparisonRightLiteralIs(want string) error {
+	s.executedByStep = true
+	if s.parseErr != nil {
+		return s.parseErr
+	}
+	comparison, ok := s.parsed.(*ComparisonExpression)
+	if !ok {
+		return fmt.Errorf("parsed expression is %T, want *ComparisonExpression", s.parsed)
+	}
+	literal, ok := comparison.Right.(*Literal)
+	if !ok {
+		return fmt.Errorf("comparison right operand is %T, want *Literal", comparison.Right)
+	}
+	if literal.Value != want {
+		return fmt.Errorf("comparison right literal is %q, want %q", literal.Value, want)
+	}
 	return nil
 }
 
@@ -128,13 +168,4 @@ func (s *cql2ATSSuite) recordAbstractTestResult() error {
 
 	s.unexpectedFailures++
 	return s.executeErr
-}
-
-func executeCQL2AbstractTest(_ context.Context, test cql2AbstractTest) error {
-	if test.ID == "" {
-		return errors.New("missing CQL2 abstract test id")
-	}
-
-	// TODO: Wire this to the parser/evaluator implementation as CQL2 support is built.
-	return fmt.Errorf("CQL2 abstract test execution is not implemented for %s", test.ID)
 }

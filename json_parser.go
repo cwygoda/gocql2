@@ -1,0 +1,492 @@
+package gocql2
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+)
+
+var comparisonOps = map[string]ComparisonOp{
+	"=":  OpEqual,
+	"<>": OpNotEqual,
+	"<":  OpLessThan,
+	">":  OpGreaterThan,
+	"<=": OpLessThanOrEqual,
+	">=": OpGreaterThanOrEqual,
+}
+
+var reservedJSONOps = map[string]struct{}{
+	"and": {}, "or": {}, "not": {}, "=": {}, "<>": {}, "<": {}, ">": {}, "<=": {}, ">=": {},
+	"like": {}, "between": {}, "in": {}, "isNull": {}, "casei": {}, "accenti": {},
+	"+": {}, "-": {}, "*": {}, "/": {}, "^": {}, "%": {}, "div": {},
+	"s_contains": {}, "s_crosses": {}, "s_disjoint": {}, "s_equals": {}, "s_intersects": {}, "s_overlaps": {}, "s_touches": {}, "s_within": {},
+	"t_after": {}, "t_before": {}, "t_contains": {}, "t_disjoint": {}, "t_during": {}, "t_equals": {}, "t_finishedBy": {}, "t_finishes": {}, "t_intersects": {}, "t_meets": {}, "t_metBy": {}, "t_overlappedBy": {}, "t_overlaps": {}, "t_startedBy": {}, "t_starts": {},
+	"a_containedBy": {}, "a_contains": {}, "a_equals": {}, "a_overlaps": {},
+}
+
+func parseJSON(input []byte, cfg ParseConfig) (Expression, error) {
+	dec := json.NewDecoder(bytes.NewReader(input))
+	dec.UseNumber()
+
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return nil, jsonSyntaxError(input, err)
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			err = fmt.Errorf("multiple JSON values")
+		}
+		return nil, jsonSyntaxError(input, err)
+	}
+
+	return parseJSONExpression(raw, JSONPathRoot(), 0, cfg)
+}
+
+type rawObject map[string]json.RawMessage
+
+type rawOpObject struct {
+	Op   string
+	Args []json.RawMessage
+}
+
+func parseJSONOpObject(raw json.RawMessage, path JSONPath) (rawOpObject, error) {
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return rawOpObject{}, err
+	}
+
+	opRaw, hasOp := obj["op"]
+	if !hasOp {
+		return rawOpObject{}, nil
+	}
+
+	var op string
+	if err := unmarshalAt(opRaw, path.Key("op"), &op); err != nil {
+		return rawOpObject{}, jsonPathError(path.Key("op"), "expected string operation")
+	}
+
+	argsRaw, hasArgs := obj["args"]
+	if !hasArgs {
+		return rawOpObject{}, jsonPathError(path.Key("args"), "missing arguments")
+	}
+	if trimmed := bytes.TrimSpace(argsRaw); len(trimmed) == 0 || trimmed[0] != '[' {
+		return rawOpObject{}, jsonPathError(path.Key("args"), "expected array")
+	}
+
+	var args []json.RawMessage
+	if err := unmarshalAt(argsRaw, path.Key("args"), &args); err != nil {
+		return rawOpObject{}, jsonPathError(path.Key("args"), "expected array")
+	}
+	return rawOpObject{Op: op, Args: args}, nil
+}
+
+func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Expression, error) {
+	if depth > cfg.MaxDepth {
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
+	}
+
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if lit.Kind == LiteralBool {
+			return lit, nil
+		}
+		return nil, jsonPathError(path, "expected CQL2 expression object or boolean")
+	}
+
+	op, err := parseJSONOpObject(raw, path)
+	if err != nil {
+		return nil, err
+	}
+	if op.Op == "" {
+		return nil, jsonPathError(path.Key("op"), "missing operation")
+	}
+
+	src := jsonSpan(path)
+	switch op.Op {
+	case "and", "or":
+		if len(op.Args) < 2 {
+			return nil, jsonPathError(path.Key("args"), "expected at least two arguments")
+		}
+		args := make([]Expression, 0, len(op.Args))
+		for i, arg := range op.Args {
+			expr, err := parseJSONExpression(arg, path.Key("args").Index(i), depth+1, cfg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, expr)
+		}
+		return &LogicalExpression{Op: LogicalOp(op.Op), Args: args, Src: src}, nil
+	case "not":
+		if len(op.Args) != 1 {
+			return nil, jsonPathError(path.Key("args"), "expected exactly one argument")
+		}
+		expr, err := parseJSONExpression(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &LogicalExpression{Op: LogicalNot, Args: []Expression{expr}, Src: src}, nil
+	case "=", "<>", "<", ">", "<=", ">=":
+		args, err := parseJSONScalarArgs(op.Args, path.Key("args"), depth, cfg, 2, 2)
+		if err != nil {
+			return nil, err
+		}
+		return &ComparisonExpression{Op: comparisonOps[op.Op], Left: args[0], Right: args[1], Src: src}, nil
+	case "like":
+		if len(op.Args) != 2 {
+			return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
+		}
+		expr, err := parseJSONCharacterExpression(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		pattern, modifier, err := parseJSONPatternExpression(op.Args[1], path.Key("args").Index(1), depth+1)
+		if err != nil {
+			return nil, err
+		}
+		return &LikeExpression{Expr: expr, Pattern: pattern, Modifier: modifier, Src: src}, nil
+	case "between":
+		if len(op.Args) != 3 {
+			return nil, jsonPathError(path.Key("args"), "expected exactly 3 arguments")
+		}
+		args := make([]ScalarExpression, 0, 3)
+		for i, rawArg := range op.Args {
+			arg, err := parseJSONNumericExpression(rawArg, path.Key("args").Index(i), depth+1, cfg)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+		return &BetweenExpression{Expr: args[0], Lower: args[1], Upper: args[2], Src: src}, nil
+	case "in":
+		if len(op.Args) != 2 {
+			return nil, jsonPathError(path.Key("args"), "expected exactly two arguments")
+		}
+		expr, err := parseJSONScalar(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		values, err := parseJSONScalarArray(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &InExpression{Expr: expr, Values: values, Src: src}, nil
+	case "isNull":
+		args, err := parseJSONScalarArgs(op.Args, path.Key("args"), depth, cfg, 1, 1)
+		if err != nil {
+			return nil, err
+		}
+		return &IsNullExpression{Expr: args[0], Src: src}, nil
+	case "casei", "accenti":
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("%q is not a boolean expression", op.Op))
+	default:
+		if _, reserved := reservedJSONOps[op.Op]; reserved {
+			return nil, jsonPathError(path.Key("op"), fmt.Sprintf("unsupported reserved operation %q", op.Op))
+		}
+		return parseJSONFunction(op.Op, op.Args, path, depth, cfg)
+	}
+}
+
+func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {
+	if depth > cfg.MaxDepth {
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
+	}
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if lit.Kind == LiteralNull {
+			return nil, jsonPathError(path, "NULL is only allowed in isNull predicates")
+		}
+		return lit, nil
+	}
+
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if propRaw, ok := obj["property"]; ok {
+		var name string
+		if err := unmarshalAt(propRaw, path.Key("property"), &name); err != nil {
+			return nil, jsonPathError(path.Key("property"), "expected string property name")
+		}
+		if name == "" {
+			return nil, jsonPathError(path.Key("property"), "property name must not be empty")
+		}
+		return &PropertyRef{Name: name, Src: jsonSpan(path)}, nil
+	}
+
+	op, err := parseJSONOpObject(raw, path)
+	if err != nil {
+		return nil, err
+	}
+	if op.Op == "" {
+		return nil, jsonPathError(path, "expected scalar expression")
+	}
+	if op.Op == "casei" || op.Op == "accenti" {
+		return parseJSONCharacterFunction(op.Op, op.Args, path, depth, cfg)
+	}
+	if _, reserved := reservedJSONOps[op.Op]; reserved {
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a scalar function", op.Op))
+	}
+	return parseJSONFunction(op.Op, op.Args, path, depth, cfg)
+}
+
+func parseJSONCharacterExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if lit.Kind != LiteralString {
+			return nil, jsonPathError(path, "expected character expression")
+		}
+		return lit, nil
+	}
+
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if _, ok := obj["property"]; ok {
+		return parseJSONScalar(raw, path, depth+1, cfg)
+	}
+
+	op, err := parseJSONOpObject(raw, path)
+	if err != nil {
+		return nil, err
+	}
+	if op.Op == "" {
+		return nil, jsonPathError(path, "expected character expression")
+	}
+	if op.Op == "casei" || op.Op == "accenti" {
+		return parseJSONCharacterFunction(op.Op, op.Args, path, depth+1, cfg)
+	}
+	if _, reserved := reservedJSONOps[op.Op]; reserved {
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a character function", op.Op))
+	}
+	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+}
+
+func parseJSONPatternExpression(raw json.RawMessage, path JSONPath, depth int) (ScalarExpression, string, error) {
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, "", err
+		}
+		if lit.Kind != LiteralString {
+			return nil, "", jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
+		}
+		return lit, "", nil
+	}
+
+	op, err := parseJSONOpObject(raw, path)
+	if err != nil {
+		return nil, "", err
+	}
+	if op.Op != "casei" && op.Op != "accenti" {
+		return nil, "", jsonPathError(path, "LIKE pattern must be a string or casei/accenti pattern")
+	}
+	if len(op.Args) != 1 {
+		return nil, "", jsonPathError(path.Key("args"), "expected exactly one argument")
+	}
+	pattern, _, err := parseJSONPatternExpression(op.Args[0], path.Key("args").Index(0), depth+1)
+	if err != nil {
+		return nil, "", err
+	}
+	return pattern, op.Op, nil
+}
+
+func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (ScalarExpression, error) {
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if lit.Kind != LiteralNumber {
+			return nil, jsonPathError(path, "expected numeric expression")
+		}
+		return lit, nil
+	}
+
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if _, ok := obj["property"]; ok {
+		return parseJSONScalar(raw, path, depth+1, cfg)
+	}
+
+	op, err := parseJSONOpObject(raw, path)
+	if err != nil {
+		return nil, err
+	}
+	if op.Op == "" {
+		return nil, jsonPathError(path, "expected numeric expression")
+	}
+	if _, reserved := reservedJSONOps[op.Op]; reserved {
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a numeric function", op.Op))
+	}
+	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+}
+
+func parseJSONCharacterFunction(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*FunctionCall, error) {
+	if len(rawArgs) != 1 {
+		return nil, jsonPathError(path.Key("args"), "expected exactly one argument")
+	}
+	arg, err := parseJSONCharacterExpression(rawArgs[0], path.Key("args").Index(0), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &FunctionCall{Name: name, Args: []Node{arg}, Src: jsonSpan(path)}, nil
+}
+
+func parseJSONFunction(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*FunctionCall, error) {
+	args := make([]Node, 0, len(rawArgs))
+	for i, raw := range rawArgs {
+		node, err := parseJSONNode(raw, path.Key("args").Index(i), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, node)
+	}
+	return &FunctionCall{Name: name, Args: args, Src: jsonSpan(path)}, nil
+}
+
+func parseJSONNode(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
+	if expr, err := parseJSONExpression(raw, path, depth, cfg); err == nil {
+		return expr, nil
+	}
+	if scalar, err := parseJSONScalar(raw, path, depth, cfg); err == nil {
+		return scalar, nil
+	}
+	if array, err := parseJSONArrayLiteral(raw, path, depth, cfg); err == nil {
+		return array, nil
+	}
+	return nil, jsonPathError(path, "expected CQL2 value")
+}
+
+func parseJSONScalarArgs(rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig, minArgs, maxArgs int) ([]ScalarExpression, error) {
+	if len(rawArgs) < minArgs || len(rawArgs) > maxArgs {
+		if minArgs == maxArgs {
+			return nil, jsonPathError(path, fmt.Sprintf("expected exactly %d arguments", minArgs))
+		}
+		return nil, jsonPathError(path, fmt.Sprintf("expected %d to %d arguments", minArgs, maxArgs))
+	}
+	args := make([]ScalarExpression, 0, len(rawArgs))
+	for i, raw := range rawArgs {
+		arg, err := parseJSONScalar(raw, path.Index(i), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, arg)
+	}
+	return args, nil
+}
+
+func parseJSONScalarArray(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) ([]ScalarExpression, error) {
+	var items []json.RawMessage
+	if err := unmarshalAt(raw, path, &items); err != nil {
+		return nil, jsonPathError(path, "expected array")
+	}
+	values := make([]ScalarExpression, 0, len(items))
+	for i, item := range items {
+		value, err := parseJSONScalar(item, path.Index(i), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
+
+func parseJSONArrayLiteral(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*ArrayLiteral, error) {
+	var items []json.RawMessage
+	if err := unmarshalAt(raw, path, &items); err != nil {
+		return nil, err
+	}
+	values := make([]Node, 0, len(items))
+	for i, item := range items {
+		value, err := parseJSONNode(item, path.Index(i), depth+1, cfg)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return &ArrayLiteral{Values: values, Src: jsonSpan(path)}, nil
+}
+
+func parseJSONLiteral(raw json.RawMessage, path JSONPath) (*Literal, bool, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var value any
+	if err := dec.Decode(&value); err != nil {
+		return nil, false, jsonPathError(path, "invalid JSON value")
+	}
+	src := jsonSpan(path)
+	switch v := value.(type) {
+	case string:
+		return &Literal{Kind: LiteralString, Value: v, Src: src}, true, nil
+	case json.Number:
+		canonical, err := canonicalNumber(v.String())
+		if err != nil {
+			return nil, true, jsonPathError(path, err.Error())
+		}
+		return &Literal{Kind: LiteralNumber, Value: canonical, Src: src}, true, nil
+	case bool:
+		return &Literal{Kind: LiteralBool, Value: v, Src: src}, true, nil
+	case nil:
+		return &Literal{Kind: LiteralNull, Value: nil, Src: src}, true, nil
+	default:
+		return nil, false, nil
+	}
+}
+
+func unmarshalAt(raw json.RawMessage, path JSONPath, out any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(out); err != nil {
+		return jsonPathError(path, err.Error())
+	}
+	return nil
+}
+
+func jsonSpan(path JSONPath) Span {
+	return Span{Start: Location{ByteOffset: -1, CharOffset: -1, JSONPath: path}, End: Location{ByteOffset: -1, CharOffset: -1, JSONPath: path}}
+}
+
+func jsonPathError(path JSONPath, message string) *ParseError {
+	return parseError(LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path}, message)
+}
+
+func jsonSyntaxError(input []byte, err error) *ParseError {
+	loc := NoLocation()
+	loc.ByteOffset = 0
+	loc.CharOffset = 0
+	if syntaxErr, ok := err.(*json.SyntaxError); ok {
+		loc = locationForByteOffset(input, int(syntaxErr.Offset)-1)
+	} else if typeErr, ok := err.(*json.UnmarshalTypeError); ok {
+		loc = locationForByteOffset(input, int(typeErr.Offset)-1)
+	}
+	return &ParseError{Source: LanguageJSON, Location: loc, Message: err.Error(), Cause: err}
+}
+
+func locationForByteOffset(input []byte, byteOffset int) Location {
+	if byteOffset < 0 {
+		byteOffset = 0
+	}
+	if byteOffset > len(input) {
+		byteOffset = len(input)
+	}
+	line, col, chars := 1, 1, 0
+	for i, r := range string(input[:byteOffset]) {
+		_ = i
+		chars++
+		if r == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return Location{ByteOffset: byteOffset, CharOffset: chars, Line: line, Column: col}
+}

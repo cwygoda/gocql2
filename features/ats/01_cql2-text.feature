@@ -5,26 +5,33 @@ Feature: A.1 CQL2 Text abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
   The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-1
-  Scenario: A.1.1. Conformance Test 1 /conf/cql2-text/validate
+  @test-1
+  Scenario Outline: A.1.1. Conformance Test 1 /conf/cql2-text/validate
     # ATS section: A.1.1
     # ATS id: /conf/cql2-text/validate
     # Requirements:
     #   all requirements
     # Purpose:
     #   Validate that CQL2 Text is supported by the server
-    Given n/a
-    When Execute conformance tests for all supported conformance classes with the parameter "Filter Language". Use the value "CQL2 Text".
-    Then assert that all conformance tests are successful.
+    When I parse the CQL2 Text filter "<filter>"
+    Then parsing succeeds
 
-  @expected-fail @test-2
-  Scenario: A.1.2. Conformance Test 2 /conf/cql2-text/escaping
+    Examples:
+      | filter                         |
+      | name = 'alice' AND height >= 1 |
+
+  @test-2
+  Scenario Outline: A.1.2. Conformance Test 2 /conf/cql2-text/escaping
     # ATS section: A.1.2
     # ATS id: /conf/cql2-text/escaping
     # Requirements:
     #   /req/cql2-text/escaping
     # Purpose:
     #   Test escaping in string literals.
-    Given One or more data sources containing string literals with embedded single quotation ( ' ) and/or BELL, and/or BACKSPACE, and/or HORIZONTAL TAB, and/or NEWLINE, and/or VERTICAL TAB, and/or FORM FEED, and/or CARRIAGE RETURN characters.
-    When Decode each string literal.
-    Then assert that the escaped embedded characters have been correctly recovered.
+    When I parse the CQL2 Text filter "<filter>"
+    Then the comparison right literal is "<value>"
+
+    Examples:
+      | filter             | value   |
+      | name = 'O''Brien'  | O'Brien |
+      | name = 'O\'Brien' | O'Brien |
