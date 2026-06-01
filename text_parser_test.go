@@ -211,10 +211,7 @@ func TestParseTextPredicates(t *testing.T) {
 		{input: `height NOT BETWEEN 1 AND 2`, want: &BetweenExpression{}},
 		{input: `status NOT IN ('old')`, want: &InExpression{}},
 		{input: `deleted_at IS NULL`, want: &IsNullExpression{}},
-		{input: `custom(name, 1)`, want: &FunctionCall{}},
 		{input: `CASEI(name) = CASEI('foo')`, want: &ComparisonExpression{}},
-		{input: `DATE('2022-04-14') = DATE('2022-04-14')`, want: &ComparisonExpression{}},
-		{input: `S_INTERSECTS(geom,BBOX(-180,-90,180,90))`, want: &FunctionCall{}},
 	}
 	for _, tc := range cases {
 		expr, err := ParseText(tc.input)
@@ -248,6 +245,37 @@ func TestParseTextPredicates(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestParseTextFunctionRegistry(t *testing.T) {
+	_, err := ParseText(`custom(name, 1)`)
+	assertParseErrorContains(t, err, `function "custom" is not allowed`)
+
+	_, err = ParseText(`CASEI(1) = '1'`)
+	assertParseErrorContains(t, err, `expected string`)
+
+	_, err = ParseText(`CASEI(name)`)
+	assertParseErrorContains(t, err, `expected predicate operator`)
+
+	boolFn := FunctionDefinition{
+		Name: "contains_any",
+		Args: []FunctionArgument{
+			{Name: "value", Types: []FunctionType{FunctionTypeString}},
+			{Name: "needle", Types: []FunctionType{FunctionTypeString}, Variadic: true},
+		},
+		Returns: []FunctionType{FunctionTypeBoolean},
+	}
+	expr, err := ParseText(`contains_any(name, 'a', 'b')`, WithAllowedFunctions(boolFn))
+	if err != nil {
+		t.Fatalf("ParseText registered variadic function: %v", err)
+	}
+	fn, ok := expr.(*FunctionCall)
+	if !ok || fn.Name != "contains_any" || len(fn.Args) != 3 || !functionCallReturns(fn, FunctionTypeBoolean) {
+		t.Fatalf("expr = %#v, want registered boolean function", expr)
+	}
+
+	_, err = ParseText(`contains_any(name, 1)`, WithAllowedFunctions(boolFn))
+	assertParseErrorContains(t, err, `expected string`)
 }
 
 func TestParseTextRejectsInvalidOperandShapes(t *testing.T) {

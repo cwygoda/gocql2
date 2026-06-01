@@ -155,7 +155,11 @@ func TestParseJSONBooleanComparisons(t *testing.T) {
 }
 
 func TestParseJSONFunctionsAndArrays(t *testing.T) {
-	expr, err := ParseJSON([]byte(`{"op":"my_func","args":[{"property":"name"},[1,"x"],true]}`))
+	expr, err := ParseJSON([]byte(`{"op":"my_func","args":[{"property":"name"},[1,"x"],true]}`), WithAllowedFunctions(FunctionDefinition{
+		Name:    "my_func",
+		Args:    []FunctionArgument{{Types: []FunctionType{FunctionTypeAny}, Variadic: true}},
+		Returns: []FunctionType{FunctionTypeBoolean},
+	}))
 	if err != nil {
 		t.Fatalf("ParseJSON: %v", err)
 	}
@@ -177,6 +181,33 @@ func TestParseJSONFunctionsAndArrays(t *testing.T) {
 	if _, ok := expr.(*ComparisonExpression); !ok {
 		t.Fatalf("expr = %T, want ComparisonExpression", expr)
 	}
+}
+
+func TestParseJSONFunctionRegistry(t *testing.T) {
+	_, err := ParseJSON([]byte(`{"op":"my_func","args":[]}`))
+	assertParseErrorContains(t, err, `function "my_func" is not allowed`)
+
+	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`))
+	assertParseErrorContains(t, err, `expected character expression`)
+
+	expr, err := ParseJSON([]byte(`{"op":"is_named","args":[{"property":"name"}]}`), WithAllowedFunctions(FunctionDefinition{
+		Name:    "is_named",
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
+		Returns: []FunctionType{FunctionTypeBoolean},
+	}))
+	if err != nil {
+		t.Fatalf("ParseJSON registered function: %v", err)
+	}
+	fn, ok := expr.(*FunctionCall)
+	if !ok || fn.Name != "is_named" || !functionCallReturns(fn, FunctionTypeBoolean) {
+		t.Fatalf("expr = %#v, want registered boolean function", expr)
+	}
+
+	_, err = ParseJSON([]byte(`{"op":"str_fn","args":[]}`), WithAllowedFunctions(FunctionDefinition{
+		Name:    "str_fn",
+		Returns: []FunctionType{FunctionTypeString},
+	}))
+	assertParseErrorContains(t, err, `does not return boolean`)
 }
 
 func TestParseJSONArithmetic(t *testing.T) {
@@ -206,6 +237,9 @@ func TestParseJSONArithmetic(t *testing.T) {
 
 func TestParseJSONDepthLimit(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"not","args":[{"op":"not","args":[true]}]}`), WithMaxDepth(1))
+	assertParseErrorContains(t, err, "maximum parse depth exceeded")
+
+	_, err = ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},{"op":"casei","args":[{"op":"casei","args":["x"]}]}]}`), WithMaxDepth(1))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 }
 

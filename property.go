@@ -105,7 +105,7 @@ func isCharacterExpression(scalar ScalarExpression) bool {
 	case *PropertyRef:
 		return value.Type == PropertyTypeAny || value.Type == PropertyTypeString
 	case *FunctionCall:
-		return true
+		return functionCallReturns(value, FunctionTypeString)
 	default:
 		return false
 	}
@@ -117,7 +117,9 @@ func isNumericExpression(scalar ScalarExpression) bool {
 		return value.Kind == LiteralNumber
 	case *PropertyRef:
 		return value.Type == PropertyTypeAny || isNumericPropertyType(value.Type)
-	case *FunctionCall, *ArithmeticExpression:
+	case *FunctionCall:
+		return functionCallReturns(value, FunctionTypeNumber) || functionCallReturns(value, FunctionTypeInteger)
+	case *ArithmeticExpression:
 		return true
 	default:
 		return false
@@ -185,7 +187,7 @@ func scalarExpressionType(scalar ScalarExpression) PropertyType {
 	case *ArithmeticExpression:
 		return PropertyTypeNumber
 	case *FunctionCall:
-		return PropertyTypeAny
+		return functionReturnPropertyType(value)
 	default:
 		return PropertyTypeAny
 	}

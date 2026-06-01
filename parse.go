@@ -10,6 +10,7 @@ const defaultMaxDepth = 128
 // ParseConfig configures parser behavior.
 type ParseConfig struct {
 	properties propertyRegistry
+	functions  functionRegistry
 
 	MaxDepth int
 }
@@ -27,7 +28,11 @@ type ParseOption func(*Parser)
 
 // NewParser builds a reusable parser.
 func NewParser(opts ...ParseOption) *Parser {
-	p := &Parser{cfg: ParseConfig{MaxDepth: defaultMaxDepth}}
+	defaultFunctions := StandardTextFunctions()
+	p := &Parser{
+		supportedFunctions: functionNames(defaultFunctions),
+		cfg:                ParseConfig{MaxDepth: defaultMaxDepth, functions: newFunctionRegistry(defaultFunctions)},
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(p)
@@ -35,6 +40,9 @@ func NewParser(opts ...ParseOption) *Parser {
 	}
 	if p.cfg.MaxDepth <= 0 {
 		p.cfg.MaxDepth = defaultMaxDepth
+	}
+	if !p.cfg.functions.initialized {
+		p.cfg.functions = functionRegistryDefaults()
 	}
 	return p
 }
@@ -68,9 +76,25 @@ func WithAllowedProperties(defs ...PropertyDefinition) ParseOption {
 	}
 }
 
-// WithSupportedFunctions records the parser's advertised function set.
+// WithSupportedFunctions configures a fail-closed name-only function registry.
+// Registered functions accept any number of arguments of any type and have an
+// unknown return type. Use WithAllowedFunctions when signature validation is
+// needed.
 func WithSupportedFunctions(names ...string) ParseOption {
-	return func(p *Parser) { p.supportedFunctions = cloneStrings(names) }
+	return func(p *Parser) {
+		p.supportedFunctions = functionNames(allowedAnyFunctions(names))
+		p.cfg.functions = newFunctionRegistry(allowedAnyFunctions(names))
+	}
+}
+
+// WithAllowedFunctions configures a fail-closed function registry. Any function
+// reference not present in the registry is rejected, and registered signatures
+// are used to validate argument counts, argument types, and return-type contexts.
+func WithAllowedFunctions(defs ...FunctionDefinition) ParseOption {
+	return func(p *Parser) {
+		p.supportedFunctions = functionNames(defs)
+		p.cfg.functions = newFunctionRegistry(defs)
+	}
 }
 
 // WithConformanceClasses records the parser's advertised conformance classes.
@@ -91,6 +115,11 @@ func (p *Parser) SupportedPropertyDefinitions() []PropertyDefinition {
 // SupportedFunctions returns the advertised function names.
 func (p *Parser) SupportedFunctions() []string {
 	return cloneStrings(p.supportedFunctions)
+}
+
+// SupportedFunctionDefinitions returns the configured allowed functions.
+func (p *Parser) SupportedFunctionDefinitions() []FunctionDefinition {
+	return cloneFunctionDefinitions(p.cfg.functions.defs)
 }
 
 // ConformanceClasses returns the advertised conformance class IDs.
@@ -133,6 +162,16 @@ func ParseText(input string, opts ...ParseOption) (Expression, error) {
 // ParseJSON parses CQL2 JSON into an AST.
 func ParseJSON(input []byte, opts ...ParseOption) (Expression, error) {
 	return NewParser(opts...).ParseJSON(input)
+}
+
+func applyParseConfigDefaults(cfg ParseConfig) ParseConfig {
+	if cfg.MaxDepth <= 0 {
+		cfg.MaxDepth = defaultMaxDepth
+	}
+	if !cfg.functions.initialized {
+		cfg.functions = functionRegistryDefaults()
+	}
+	return cfg
 }
 
 func cloneStrings(values []string) []string {
