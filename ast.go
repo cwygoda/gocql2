@@ -108,14 +108,13 @@ func (*ArithmeticExpression) scalarNode() {}
 
 func (e *ArithmeticExpression) Span() Span { return e.Src }
 
-// LikeExpression represents a LIKE predicate. Modifier is "", "casei", or
-// "accenti" for the right-hand pattern.
+// LikeExpression represents a LIKE predicate. Pattern is a string literal,
+// optionally wrapped by CQL2 text functions such as casei or accenti.
 type LikeExpression struct {
-	Expr     ScalarExpression
-	Pattern  ScalarExpression
-	Modifier string
-	Src      Span
-	Not      bool
+	Expr    ScalarExpression
+	Pattern ScalarExpression
+	Src     Span
+	Not     bool
 }
 
 func (*LikeExpression) expressionNode() {}
