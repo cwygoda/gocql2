@@ -228,6 +228,9 @@ func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseCon
 	if op.Op == "casei" || op.Op == "accenti" {
 		return parseJSONCharacterFunction(op.Op, op.Args, path, depth, cfg)
 	}
+	if isJSONArithmeticOp(op.Op) {
+		return parseJSONArithmeticExpression(op.Op, op.Args, path, depth, cfg)
+	}
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a scalar function", op.Op))
 	}
@@ -323,10 +326,37 @@ func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, c
 	if op.Op == "" {
 		return nil, jsonPathError(path, "expected numeric expression")
 	}
+	if isJSONArithmeticOp(op.Op) {
+		return parseJSONArithmeticExpression(op.Op, op.Args, path, depth+1, cfg)
+	}
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as a numeric function", op.Op))
 	}
 	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
+}
+
+func parseJSONArithmeticExpression(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*ArithmeticExpression, error) {
+	if len(rawArgs) != 2 {
+		return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
+	}
+	left, err := parseJSONNumericExpression(rawArgs[0], path.Key("args").Index(0), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	right, err := parseJSONNumericExpression(rawArgs[1], path.Key("args").Index(1), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &ArithmeticExpression{Op: ArithmeticOp(name), Left: left, Right: right, Src: jsonSpan(path)}, nil
+}
+
+func isJSONArithmeticOp(op string) bool {
+	switch op {
+	case "+", "-", "*", "/", "^", "%", "div":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseJSONCharacterFunction(name string, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*FunctionCall, error) {
