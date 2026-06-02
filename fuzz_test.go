@@ -17,6 +17,8 @@ func FuzzParseTextDoesNotPanic(f *testing.F) {
 		`CASEI(name) = casei('alice')`,
 		`A_CONTAINS(tags, ('foo', 'bar'))`,
 		`A_OVERLAPS(tags, (1, TRUE, status = 'new'))`,
+		`T_AFTER(event_time,TIMESTAMP('2022-04-24T07:59:57Z'))`,
+		`T_DURING(INTERVAL(start_time,end_time),INTERVAL('2021-01-01','2021-12-31'))`,
 		`"AND" = 1`,
 	} {
 		f.Add(seed)
@@ -150,12 +152,64 @@ func FuzzParseJSONDoesNotPanic(f *testing.F) {
 		`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["alice"]}]}`,
 		`{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`,
 		`{"op":"a_overlaps","args":[{"property":"tags"},[1,true,{"op":"=","args":[{"property":"status"},"new"]}]]}`,
+		`{"op":"t_after","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`,
+		`{"op":"t_during","args":[{"interval":[{"property":"start_time"},{"property":"end_time"}]},{"interval":["2021-01-01","2021-12-31"]}]}`,
 		`null`,
 		`{`,
 	} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, input string) {
+		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+			return
+		}
+	})
+}
+
+func FuzzTemporalPredicatesDoNotPanic(f *testing.F) {
+	for _, seed := range []struct {
+		op    string
+		start string
+		end   string
+	}{
+		{"t_after", "2021-01-01", "2021-12-31"},
+		{"t_before", "2021-01-01T00:00:00Z", "2021-12-31T23:59:59Z"},
+		{"t_intersects", "2021-01-01T01:00:00+01:00", "2021-12-31T23:59:59+01:00"},
+		{"t_during", "2021-01-01", ".."},
+		{"t_overlaps", "..", "2021-12-31"},
+	} {
+		f.Add(seed.op, seed.start, seed.end)
+	}
+	f.Fuzz(func(t *testing.T, op, start, end string) {
+		op = strings.ToLower(op)
+		temporalOp, ok := temporalPredicateOps[op]
+		if !ok {
+			temporalOp = TemporalOpIntersects
+			op = string(temporalOp)
+		}
+
+		left := "event_time"
+		if isIntervalOnlyTemporalPredicate(temporalOp) {
+			left = "INTERVAL(start_time,end_time)"
+		}
+		text := fmt.Sprintf("%s(%s,INTERVAL(%s,%s))", strings.ToUpper(op), left, cqlTextString(start), cqlTextString(end))
+		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+			return
+		}
+
+		jsonStart, err := json.Marshal(start)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q): %v", start, err)
+		}
+		jsonEnd, err := json.Marshal(end)
+		if err != nil {
+			t.Fatalf("json.Marshal(%q): %v", end, err)
+		}
+		jsonLeft := `{"property":"event_time"}`
+		if isIntervalOnlyTemporalPredicate(temporalOp) {
+			jsonLeft = `{"interval":[{"property":"start_time"},{"property":"end_time"}]}`
+		}
+		input := fmt.Sprintf(`{"op":%q,"args":[%s,{"interval":[%s,%s]}]}`, op, jsonLeft, jsonStart, jsonEnd)
 		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
 			return
 		}

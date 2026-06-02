@@ -93,6 +93,15 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^At least one queryable has an array data type\.$`, s.atLeastOneQueryableHasArrayDataType)
 	ctx.Step(`^For each queryable \{queryable\} with an array data type, evaluate the following filter expressions$`, s.forEachArrayQueryableEvaluateFilters)
 	ctx.Step(`^(A_(?:CONTAINS|CONTAINEDBY|EQUALS|OVERLAPS)\(\{queryable\},\("foo","bar"\)\))$`, s.iEvaluateTheArrayPredicateTemplate)
+
+	ctx.Step(`^One or more data sources, each with a list of queryables with at least one queryable of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
+	ctx.Step(`^One or more data sources, each with a list of queryables with at least two queryables of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
+	ctx.Step(`^For each queryable \{queryable\} of data type Timestamp, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^For each queryable \{queryable\} of data type Date, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type Timestamp, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type Date, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^(T_(?:AFTER|BEFORE|CONTAINS|DISJOINT|DURING|EQUALS|FINISHEDBY|FINISHES|INTERSECTS|MEETS|METBY|OVERLAPPEDBY|OVERLAPS|STARTEDBY|STARTS)\(.+\))$`, s.iEvaluateTheTemporalPredicateTemplate)
+
 	ctx.Step(`^assert successful execution of the evaluation;$`, s.arrayPredicateParsingSucceeds)
 	ctx.Step(`^store the valid predicates for each data source\.$`, s.storeTheValidPredicatesForEachDataSource)
 }
@@ -153,10 +162,18 @@ func (s *cql2ATSSuite) theComparisonRightLiteralIs(want string) error {
 	return nil
 }
 
-const arrayPredicateATSID = "/conf/array-functions/array-predicates"
+const (
+	arrayPredicateATSID     = "/conf/array-functions/array-predicates"
+	temporalFunctions1ATSID = "/conf/temporal-functions/temporal-functions-1"
+	temporalFunctions2ATSID = "/conf/temporal-functions/temporal-functions-2"
+)
 
 func (s *cql2ATSSuite) isArrayPredicateATS() bool {
 	return s.current.ID == arrayPredicateATSID
+}
+
+func (s *cql2ATSSuite) isTemporalFunctionsATS() bool {
+	return s.current.ID == temporalFunctions1ATSID || s.current.ID == temporalFunctions2ATSID
 }
 
 func (s *cql2ATSSuite) oneOrMoreDataSourcesWithQueryableLists() error {
@@ -194,8 +211,38 @@ func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
 	return s.parseErr
 }
 
+func (s *cql2ATSSuite) oneOrMoreDataSourcesWithTemporalQueryable() error {
+	if s.isTemporalFunctionsATS() {
+		s.executedByStep = true
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) forEachTemporalQueryableEvaluateFilters() error {
+	if s.isTemporalFunctionsATS() {
+		s.executedByStep = true
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(filter string) error {
+	if !s.isTemporalFunctionsATS() {
+		return nil
+	}
+	s.executedByStep = true
+	filter = strings.ReplaceAll(filter, "{queryable1}", "start_time")
+	filter = strings.ReplaceAll(filter, "{queryable2}", "end_time")
+	filter = strings.ReplaceAll(filter, "{queryable}", "event_time")
+	s.parsed, s.parseErr = ParseText(filter, WithAllowedProperties(
+		PropertyDefinition{Name: "event_time", Type: PropertyTypeAny},
+		PropertyDefinition{Name: "start_time", Type: PropertyTypeAny},
+		PropertyDefinition{Name: "end_time", Type: PropertyTypeAny},
+	))
+	return s.parseErr
+}
+
 func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
-	if !s.isArrayPredicateATS() {
+	if !s.isArrayPredicateATS() && !s.isTemporalFunctionsATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -203,7 +250,7 @@ func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
 }
 
 func (s *cql2ATSSuite) storeTheValidPredicatesForEachDataSource() error {
-	if s.isArrayPredicateATS() {
+	if s.isArrayPredicateATS() || s.isTemporalFunctionsATS() {
 		s.executedByStep = true
 	}
 	return nil

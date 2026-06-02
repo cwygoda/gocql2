@@ -221,6 +221,11 @@ func scalarExpressionType(scalar ScalarExpression) PropertyType {
 		return value.Type
 	case *ArithmeticExpression:
 		return PropertyTypeNumber
+	case *TemporalInstant:
+		if value.Kind == TemporalInstantDate {
+			return PropertyTypeDate
+		}
+		return PropertyTypeTimestamp
 	case *FunctionCall:
 		return functionReturnPropertyType(value)
 	default:

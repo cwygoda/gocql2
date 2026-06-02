@@ -278,6 +278,14 @@ func semantic(node Node) any {
 		return map[string]any{"type": "isNull", "expr": semantic(n.Expr), "not": n.Not}
 	case *ArrayPredicateExpression:
 		return map[string]any{"type": "arrayPredicate", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
+	case *TemporalPredicateExpression:
+		return map[string]any{"type": "temporalPredicate", "op": string(n.Op), "left": semantic(n.Left), "right": semantic(n.Right)}
+	case *TemporalInstant:
+		return map[string]any{"type": "temporalInstant", "kind": string(n.Kind), "value": n.Value}
+	case *TemporalUnbounded:
+		return map[string]any{"type": "temporalUnbounded"}
+	case *TemporalInterval:
+		return map[string]any{"type": "temporalInterval", "start": semantic(n.Start), "end": semantic(n.End)}
 	case *PropertyRef:
 		return map[string]any{"type": "property", "name": n.Name}
 	case *Literal:

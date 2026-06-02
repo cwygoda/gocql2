@@ -17,13 +17,16 @@ const (
 	// allow-lists where no signature metadata is available.
 	FunctionTypeAny FunctionType = ""
 
-	FunctionTypeString   FunctionType = "string"
-	FunctionTypeNumber   FunctionType = "number"
-	FunctionTypeInteger  FunctionType = "integer"
-	FunctionTypeDateTime FunctionType = "datetime"
-	FunctionTypeGeometry FunctionType = "geometry"
-	FunctionTypeBoolean  FunctionType = "boolean"
-	FunctionTypeArray    FunctionType = "array"
+	FunctionTypeString    FunctionType = "string"
+	FunctionTypeNumber    FunctionType = "number"
+	FunctionTypeInteger   FunctionType = "integer"
+	FunctionTypeDate      FunctionType = "date"
+	FunctionTypeTimestamp FunctionType = "timestamp"
+	FunctionTypeDateTime  FunctionType = "datetime"
+	FunctionTypeInterval  FunctionType = "interval"
+	FunctionTypeGeometry  FunctionType = "geometry"
+	FunctionTypeBoolean   FunctionType = "boolean"
+	FunctionTypeArray     FunctionType = "array"
 )
 
 // Standard CQL2 text function names.
@@ -206,6 +209,13 @@ func nodeFunctionTypes(node Node) []FunctionType {
 		return []FunctionType{propertyFunctionType(value.Type)}
 	case *ArithmeticExpression:
 		return []FunctionType{FunctionTypeNumber}
+	case *TemporalInstant:
+		if value.Kind == TemporalInstantDate {
+			return []FunctionType{FunctionTypeDate}
+		}
+		return []FunctionType{FunctionTypeTimestamp}
+	case *TemporalInterval:
+		return []FunctionType{FunctionTypeInterval}
 	case *FunctionCall:
 		if len(value.ReturnTypes) == 0 {
 			return []FunctionType{FunctionTypeAny}
@@ -232,8 +242,12 @@ func propertyFunctionType(typ PropertyType) FunctionType {
 		return FunctionTypeInteger
 	case PropertyTypeBoolean:
 		return FunctionTypeBoolean
-	case PropertyTypeDate, PropertyTypeTimestamp, PropertyTypeInterval:
-		return FunctionTypeDateTime
+	case PropertyTypeDate:
+		return FunctionTypeDate
+	case PropertyTypeTimestamp:
+		return FunctionTypeTimestamp
+	case PropertyTypeInterval:
+		return FunctionTypeInterval
 	case PropertyTypePoint, PropertyTypeMultiPoint, PropertyTypeLineString, PropertyTypeMultiLineString,
 		PropertyTypePolygon, PropertyTypeMultiPolygon, PropertyTypeGeometry, PropertyTypeGeometryCollection:
 		return FunctionTypeGeometry
@@ -248,7 +262,13 @@ func functionTypeCompatible(expected, actual FunctionType) bool {
 	if expected == FunctionTypeAny || actual == FunctionTypeAny || expected == actual {
 		return true
 	}
-	return expected == FunctionTypeNumber && actual == FunctionTypeInteger
+	if expected == FunctionTypeNumber && actual == FunctionTypeInteger {
+		return true
+	}
+	if expected == FunctionTypeDateTime {
+		return actual == FunctionTypeDate || actual == FunctionTypeTimestamp
+	}
+	return actual == FunctionTypeDateTime && (expected == FunctionTypeDate || expected == FunctionTypeTimestamp)
 }
 
 func functionTypesOverlap(actual, expected []FunctionType) bool {
@@ -271,7 +291,9 @@ func functionCallReturns(call *FunctionCall, expected FunctionType) bool {
 
 func isKnownFunctionType(typ FunctionType) bool {
 	switch typ {
-	case FunctionTypeAny, FunctionTypeString, FunctionTypeNumber, FunctionTypeInteger, FunctionTypeDateTime, FunctionTypeGeometry, FunctionTypeBoolean, FunctionTypeArray:
+	case FunctionTypeAny, FunctionTypeString, FunctionTypeNumber, FunctionTypeInteger,
+		FunctionTypeDate, FunctionTypeTimestamp, FunctionTypeDateTime, FunctionTypeInterval,
+		FunctionTypeGeometry, FunctionTypeBoolean, FunctionTypeArray:
 		return true
 	default:
 		return false
@@ -371,8 +393,12 @@ func functionReturnPropertyType(call *FunctionCall) PropertyType {
 		return PropertyTypeInteger
 	case FunctionTypeBoolean:
 		return PropertyTypeBoolean
-	case FunctionTypeDateTime:
+	case FunctionTypeDate:
+		return PropertyTypeDate
+	case FunctionTypeTimestamp, FunctionTypeDateTime:
 		return PropertyTypeTimestamp
+	case FunctionTypeInterval:
+		return PropertyTypeInterval
 	case FunctionTypeGeometry:
 		return PropertyTypeGeometry
 	case FunctionTypeArray:
