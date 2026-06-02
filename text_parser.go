@@ -86,8 +86,21 @@ func (p *textParser) parseNot(depth int) (Expression, error) {
 
 func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 	if p.peek().kind == tokenKeyword {
+		if op, ok := isTemporalPredicateOp(p.peek().text); ok {
+			return p.parseTemporalPredicate(op, depth+1)
+		}
 		if op, ok := isArrayPredicateOp(p.peek().text); ok {
 			return p.parseArrayPredicate(op, depth+1)
+		}
+		if p.peek().text == "INTERVAL" {
+			operand, err := p.parseTemporalInstance(depth + 1)
+			if err != nil {
+				return nil, err
+			}
+			if p.matchKeyword("IS") {
+				return p.finishIsNull(operand)
+			}
+			return nil, p.errorHere("expected predicate operator", "IS")
 		}
 	}
 
@@ -342,6 +355,12 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 			p.advance()
 			return &Literal{Kind: LiteralBool, Value: tok.text == "TRUE", Src: tok.span}, nil
 		}
+		if tok.text == "DATE" || tok.text == "TIMESTAMP" {
+			return p.parseTemporalInstantFunction(depth + 1)
+		}
+		if tok.text == "INTERVAL" {
+			return nil, parseError(LanguageText, tok.span.Start, "INTERVAL is only allowed as a temporal operand", "temporal predicate", "IS NULL", "function argument")
+		}
 		if tok.text == "NULL" {
 			return nil, parseError(LanguageText, tok.span.Start, "NULL is only allowed in IS NULL predicates", "scalar expression")
 		}
@@ -434,6 +453,136 @@ func (p *textParser) finishFunction(nameTok token, depth int) (*FunctionCall, er
 	return &FunctionCall{Name: name, Args: args, ReturnTypes: cloneFunctionTypes(def.Returns), Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 }
 
+func (p *textParser) parseTemporalPredicate(op TemporalPredicateOp, depth int) (*TemporalPredicateExpression, error) {
+	nameTok := p.advance()
+	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
+		return nil, err
+	}
+	left, err := p.parseTemporalOperand(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	if _, expectErr := p.expect(tokenComma, "comma"); expectErr != nil {
+		return nil, expectErr
+	}
+	right, err := p.parseTemporalOperand(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	end, err := p.expect(tokenRParen, "closing parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTemporalPredicateOperands(op, left, right, LanguageText); err != nil {
+		return nil, err
+	}
+	return &TemporalPredicateExpression{Op: op, Left: left, Right: right, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
+}
+
+func (p *textParser) parseTemporalOperand(depth int) (Node, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	if p.at(tokenKeyword, "DATE") || p.at(tokenKeyword, "TIMESTAMP") || p.at(tokenKeyword, "INTERVAL") {
+		return p.parseTemporalInstance(depth + 1)
+	}
+	node, err := p.parseScalarPrimary(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (p *textParser) parseTemporalInstance(depth int) (Node, error) {
+	if p.at(tokenKeyword, "DATE") || p.at(tokenKeyword, "TIMESTAMP") {
+		return p.parseTemporalInstantFunction(depth + 1)
+	}
+	if p.at(tokenKeyword, "INTERVAL") {
+		return p.parseTemporalInterval(depth + 1)
+	}
+	return nil, p.errorHere("expected temporal instance", "DATE", "TIMESTAMP", "INTERVAL")
+}
+
+func (p *textParser) parseTemporalInstantFunction(depth int) (*TemporalInstant, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	nameTok := p.advance()
+	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
+		return nil, err
+	}
+	valueTok, err := p.expect(tokenString, "temporal literal string")
+	if err != nil {
+		return nil, err
+	}
+	end, err := p.expect(tokenRParen, "closing parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	kind := TemporalInstantDate
+	if nameTok.text == "TIMESTAMP" {
+		kind = TemporalInstantTimestamp
+	}
+	if kind == TemporalInstantDate {
+		if err := validateDateLiteral(valueTok.text); err != nil {
+			return nil, parseError(LanguageText, valueTok.span.Start, err.Error())
+		}
+	} else if err := validateTimestampLiteral(valueTok.text, p.cfg.StrictTimestampUTC); err != nil {
+		return nil, parseError(LanguageText, valueTok.span.Start, err.Error())
+	}
+	return &TemporalInstant{Kind: kind, Value: valueTok.text, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
+}
+
+func (p *textParser) parseTemporalInterval(depth int) (*TemporalInterval, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	nameTok, _ := p.consumeKeyword("INTERVAL")
+	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
+		return nil, err
+	}
+	start, err := p.parseTemporalIntervalEndpoint(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	if _, expectErr := p.expect(tokenComma, "comma"); expectErr != nil {
+		return nil, expectErr
+	}
+	endNode, err := p.parseTemporalIntervalEndpoint(depth + 1)
+	if err != nil {
+		return nil, err
+	}
+	end, err := p.expect(tokenRParen, "closing parenthesis")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTemporalIntervalOperands(start, endNode, LanguageText); err != nil {
+		return nil, err
+	}
+	return &TemporalInterval{Start: start, End: endNode, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
+}
+
+func (p *textParser) parseTemporalIntervalEndpoint(depth int) (Node, error) {
+	if depth > p.cfg.MaxDepth {
+		return nil, p.errorHere("maximum parse depth exceeded")
+	}
+	if p.at(tokenString, "") {
+		tok := p.advance()
+		if tok.text == ".." {
+			return &TemporalUnbounded{Src: tok.span}, nil
+		}
+		kind, err := temporalInstantKindFromString(tok.text, p.cfg.StrictTimestampUTC)
+		if err != nil {
+			return nil, parseError(LanguageText, tok.span.Start, err.Error())
+		}
+		return &TemporalInstant{Kind: kind, Value: tok.text, Src: tok.span}, nil
+	}
+	if p.peek().kind == tokenIdentifier || p.peek().kind == tokenQuotedIdentifier {
+		return p.parseScalarPrimary(depth + 1)
+	}
+	return nil, p.errorHere("expected interval endpoint", "date string", "timestamp string", "..", "property", "function")
+}
+
 func (p *textParser) parseArrayPredicate(op ArrayPredicateOp, depth int) (*ArrayPredicateExpression, error) {
 	nameTok := p.advance()
 	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
@@ -512,6 +661,9 @@ func (p *textParser) parseArrayElement(depth int) (Node, error) {
 		return expr, nil
 	}
 	p.pos = start
+	if p.at(tokenKeyword, "INTERVAL") {
+		return p.parseTemporalInstance(depth + 1)
+	}
 	return p.parseScalar(depth + 1)
 }
 
@@ -521,6 +673,9 @@ func (p *textParser) parseFunctionArg(depth int) (Node, error) {
 		return expr, nil
 	}
 	p.pos = start
+	if p.at(tokenKeyword, "INTERVAL") {
+		return p.parseTemporalInstance(depth + 1)
+	}
 	if scalar, err := p.parseScalar(depth + 1); err == nil {
 		return scalar, nil
 	}

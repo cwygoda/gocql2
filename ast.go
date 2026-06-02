@@ -159,6 +159,79 @@ func (*IsNullExpression) expressionNode() {}
 
 func (e *IsNullExpression) Span() Span { return e.Src }
 
+// TemporalPredicateOp is a standardized temporal comparison operation.
+type TemporalPredicateOp string
+
+// Supported temporal predicate operators.
+const (
+	TemporalOpAfter        TemporalPredicateOp = "t_after"
+	TemporalOpBefore       TemporalPredicateOp = "t_before"
+	TemporalOpContains     TemporalPredicateOp = "t_contains"
+	TemporalOpDisjoint     TemporalPredicateOp = "t_disjoint"
+	TemporalOpDuring       TemporalPredicateOp = "t_during"
+	TemporalOpEquals       TemporalPredicateOp = "t_equals"
+	TemporalOpFinishedBy   TemporalPredicateOp = "t_finishedby"
+	TemporalOpFinishes     TemporalPredicateOp = "t_finishes"
+	TemporalOpIntersects   TemporalPredicateOp = "t_intersects"
+	TemporalOpMeets        TemporalPredicateOp = "t_meets"
+	TemporalOpMetBy        TemporalPredicateOp = "t_metby"
+	TemporalOpOverlappedBy TemporalPredicateOp = "t_overlappedby"
+	TemporalOpOverlaps     TemporalPredicateOp = "t_overlaps"
+	TemporalOpStartedBy    TemporalPredicateOp = "t_startedby"
+	TemporalOpStarts       TemporalPredicateOp = "t_starts"
+)
+
+// TemporalPredicateExpression compares two temporal-valued operands.
+type TemporalPredicateExpression struct {
+	Op    TemporalPredicateOp
+	Left  Node
+	Right Node
+	Src   Span
+}
+
+func (*TemporalPredicateExpression) expressionNode() {}
+
+func (e *TemporalPredicateExpression) Span() Span { return e.Src }
+
+// TemporalInstantKind identifies the CQL2 temporal instant representation.
+type TemporalInstantKind string
+
+// Supported temporal instant kinds.
+const (
+	TemporalInstantDate      TemporalInstantKind = "date"
+	TemporalInstantTimestamp TemporalInstantKind = "timestamp"
+)
+
+// TemporalInstant represents a DATE or TIMESTAMP instant. Instants are scalar
+// values in CQL2 and may also appear as temporal predicate operands.
+type TemporalInstant struct {
+	Kind  TemporalInstantKind
+	Value string
+	Src   Span
+}
+
+func (*TemporalInstant) scalarNode() {}
+
+func (i *TemporalInstant) Span() Span { return i.Src }
+
+// TemporalUnbounded represents an open interval endpoint written as "..".
+type TemporalUnbounded struct {
+	Src Span
+}
+
+func (u *TemporalUnbounded) Span() Span { return u.Src }
+
+// TemporalInterval represents an INTERVAL instance. Its endpoints are temporal
+// instants, unbounded markers, instant-valued properties, or instant-valued
+// functions.
+type TemporalInterval struct {
+	Start Node
+	End   Node
+	Src   Span
+}
+
+func (i *TemporalInterval) Span() Span { return i.Src }
+
 // ArrayPredicateOp is a standardized array comparison operation.
 type ArrayPredicateOp string
 

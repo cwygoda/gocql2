@@ -106,6 +106,9 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 	}
 
 	src := jsonSpan(path)
+	if temporalOp, ok := isTemporalPredicateOp(op.Op); ok {
+		return parseJSONTemporalPredicate(temporalOp, op.Args, path, depth, cfg)
+	}
 	switch op.Op {
 	case "and", "or":
 		if len(op.Args) < 2 {
@@ -223,12 +226,171 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 	}
 }
 
+func parseJSONTemporalPredicate(op TemporalPredicateOp, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*TemporalPredicateExpression, error) {
+	if len(rawArgs) != 2 {
+		return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
+	}
+	left, err := parseJSONTemporalOperand(rawArgs[0], path.Key("args").Index(0), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	right, err := parseJSONTemporalOperand(rawArgs[1], path.Key("args").Index(1), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTemporalPredicateOperands(op, left, right, LanguageJSON); err != nil {
+		return nil, err
+	}
+	return &TemporalPredicateExpression{Op: op, Left: left, Right: right, Src: jsonSpan(path)}, nil
+}
+
+func parseJSONTemporalOperand(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
+	temporal, temporalErr := parseJSONTemporalInstance(raw, path, depth+1, cfg)
+	if temporalErr == nil {
+		return temporal, nil
+	}
+	if hasJSONTemporalInstanceKey(raw, path) {
+		return nil, temporalErr
+	}
+	node, err := parseJSONScalar(raw, path, depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func hasJSONTemporalInstanceKey(raw json.RawMessage, path JSONPath) bool {
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return false
+	}
+	_, hasDate := obj["date"]
+	_, hasTimestamp := obj["timestamp"]
+	_, hasInterval := obj["interval"]
+	return hasDate || hasTimestamp || hasInterval
+}
+
+func parseJSONTemporalInstance(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
+	if depth > cfg.MaxDepth {
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
+	}
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if _, ok := obj["date"]; ok {
+		return parseJSONTemporalInstant(raw, path, cfg)
+	}
+	if _, ok := obj["timestamp"]; ok {
+		return parseJSONTemporalInstant(raw, path, cfg)
+	}
+	if _, ok := obj["interval"]; ok {
+		return parseJSONTemporalInterval(raw, path, depth+1, cfg)
+	}
+	return nil, jsonPathError(path, "expected temporal instance")
+}
+
+func parseJSONTemporalInstant(raw json.RawMessage, path JSONPath, cfg ParseConfig) (*TemporalInstant, error) {
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if rawDate, ok := obj["date"]; ok {
+		var value string
+		if err := unmarshalAt(rawDate, path.Key("date"), &value); err != nil {
+			return nil, jsonPathError(path.Key("date"), "expected date string")
+		}
+		if err := validateDateLiteral(value); err != nil {
+			return nil, jsonPathError(path.Key("date"), err.Error())
+		}
+		return &TemporalInstant{Kind: TemporalInstantDate, Value: value, Src: jsonSpan(path)}, nil
+	}
+	if rawTimestamp, ok := obj["timestamp"]; ok {
+		var value string
+		if err := unmarshalAt(rawTimestamp, path.Key("timestamp"), &value); err != nil {
+			return nil, jsonPathError(path.Key("timestamp"), "expected timestamp string")
+		}
+		if err := validateTimestampLiteral(value, cfg.StrictTimestampUTC); err != nil {
+			return nil, jsonPathError(path.Key("timestamp"), err.Error())
+		}
+		return &TemporalInstant{Kind: TemporalInstantTimestamp, Value: value, Src: jsonSpan(path)}, nil
+	}
+	return nil, jsonPathError(path, "expected temporal instant")
+}
+
+func parseJSONTemporalInterval(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*TemporalInterval, error) {
+	if depth > cfg.MaxDepth {
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
+	}
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	rawInterval, ok := obj["interval"]
+	if !ok {
+		return nil, jsonPathError(path.Key("interval"), "missing interval")
+	}
+	var items []json.RawMessage
+	if err := unmarshalAt(rawInterval, path.Key("interval"), &items); err != nil {
+		return nil, jsonPathError(path.Key("interval"), "expected array")
+	}
+	if len(items) != 2 {
+		return nil, jsonPathError(path.Key("interval"), "expected exactly 2 interval endpoints")
+	}
+	start, err := parseJSONTemporalIntervalEndpoint(items[0], path.Key("interval").Index(0), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	end, err := parseJSONTemporalIntervalEndpoint(items[1], path.Key("interval").Index(1), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTemporalIntervalOperands(start, end, LanguageJSON); err != nil {
+		return nil, err
+	}
+	return &TemporalInterval{Start: start, End: end, Src: jsonSpan(path)}, nil
+}
+
+func parseJSONTemporalIntervalEndpoint(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
+	if depth > cfg.MaxDepth {
+		return nil, jsonPathError(path, "maximum parse depth exceeded")
+	}
+	if lit, ok, err := parseJSONLiteral(raw, path); ok || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if lit.Kind != LiteralString {
+			return nil, jsonPathError(path, "expected interval endpoint")
+		}
+		value, ok := lit.Value.(string)
+		if !ok {
+			return nil, jsonPathError(path, "expected interval endpoint")
+		}
+		if value == ".." {
+			return &TemporalUnbounded{Src: lit.Src}, nil
+		}
+		kind, err := temporalInstantKindFromString(value, cfg.StrictTimestampUTC)
+		if err != nil {
+			return nil, jsonPathError(path, err.Error())
+		}
+		return &TemporalInstant{Kind: kind, Value: value, Src: lit.Src}, nil
+	}
+	node, err := parseJSONScalar(raw, path, depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
 func parseJSONIsNullOperand(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
 	if expr, err := parseJSONExpression(raw, path, depth, cfg); err == nil {
 		return expr, nil
 	}
 	if scalar, err := parseJSONScalar(raw, path, depth, cfg); err == nil {
 		return scalar, nil
+	}
+	if temporal, err := parseJSONTemporalInstance(raw, path, depth, cfg); err == nil {
+		return temporal, nil
 	}
 	return nil, jsonPathError(path, "expected IS NULL operand")
 }
@@ -271,6 +433,12 @@ func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseCon
 			return nil, jsonPathError(path.Key("property"), "property name must not be empty")
 		}
 		return propertyRef(name, jsonSpan(path), cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("property")})
+	}
+	if _, ok := obj["date"]; ok {
+		return parseJSONTemporalInstant(raw, path, cfg)
+	}
+	if _, ok := obj["timestamp"]; ok {
+		return parseJSONTemporalInstant(raw, path, cfg)
 	}
 
 	op, err := parseJSONOpObject(raw, path)
@@ -486,6 +654,11 @@ func parseJSONNode(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfi
 	}
 	if scalar, err := parseJSONScalar(raw, path, depth, cfg); err == nil {
 		return scalar, nil
+	}
+	if temporal, err := parseJSONTemporalInstance(raw, path, depth, cfg); err == nil {
+		return temporal, nil
+	} else if hasJSONTemporalInstanceKey(raw, path) {
+		return nil, err
 	}
 	if array, err := parseJSONArrayLiteral(raw, path, depth, cfg); err == nil {
 		return array, nil
