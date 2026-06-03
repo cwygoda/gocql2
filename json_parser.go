@@ -112,6 +112,9 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 	if temporalOp, ok := isTemporalPredicateOp(op.Op); ok {
 		return parseJSONTemporalPredicate(temporalOp, op.Args, path, depth, cfg)
 	}
+	if arrayOp, ok := isJSONArrayPredicateOp(op.Op); ok {
+		return parseJSONArrayPredicate(arrayOp, op.Args, path, depth, cfg)
+	}
 	switch op.Op {
 	case "and", "or":
 		if len(op.Args) < 2 {
@@ -196,22 +199,6 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 			return nil, err
 		}
 		return &IsNullExpression{Expr: operand, Src: src}, nil
-	case "a_contains", "a_containedby", "a_equals", "a_overlaps":
-		if len(op.Args) != 2 {
-			return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
-		}
-		left, err := parseJSONArrayOperand(op.Args[0], path.Key("args").Index(0), depth+1, cfg)
-		if err != nil {
-			return nil, err
-		}
-		right, err := parseJSONArrayOperand(op.Args[1], path.Key("args").Index(1), depth+1, cfg)
-		if err != nil {
-			return nil, err
-		}
-		if err := validateArrayPredicateOperands(left, right, LanguageJSON); err != nil {
-			return nil, err
-		}
-		return &ArrayPredicateExpression{Op: arrayPredicateOps[op.Op], Left: left, Right: right, Src: src}, nil
 	case "casei", "accenti":
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("%q is not a boolean expression", op.Op))
 	default:
@@ -227,6 +214,24 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		}
 		return fn, nil
 	}
+}
+
+func parseJSONArrayPredicate(op ArrayPredicateOp, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*ArrayPredicateExpression, error) {
+	if len(rawArgs) != 2 {
+		return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
+	}
+	left, err := parseJSONArrayOperand(rawArgs[0], path.Key("args").Index(0), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	right, err := parseJSONArrayOperand(rawArgs[1], path.Key("args").Index(1), depth+1, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateArrayPredicateOperands(left, right, LanguageJSON); err != nil {
+		return nil, err
+	}
+	return &ArrayPredicateExpression{Op: op, Left: left, Right: right, Src: jsonSpan(path)}, nil
 }
 
 func parseJSONTemporalPredicate(op TemporalPredicateOp, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*TemporalPredicateExpression, error) {
