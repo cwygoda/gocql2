@@ -29,6 +29,31 @@ func TestWithConformanceCanonicalizesAndEnablesStandardFunctions(t *testing.T) {
 	assertParseErrorContains(t, err, `function "tolower" is not allowed`)
 }
 
+func TestDefaultParserRejectsOptionalConformanceSyntax(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: `name LIKE 'A%'`, want: `advanced-comparison-operators`},
+		{input: `height BETWEEN 1 AND 2`, want: `advanced-comparison-operators`},
+		{input: `status IN ('new')`, want: `advanced-comparison-operators`},
+		{input: `height + 1 > 2`, want: `arithmetic conformance`},
+		{input: `FALSE <> archived`, want: `property-property`},
+		{input: `S_INTERSECTS(geom,POINT(1 2))`, want: `spatial conformance`},
+		{input: `T_AFTER(event_time,TIMESTAMP('2022-01-01T00:00:00Z'))`, want: `temporal-functions`},
+		{input: `A_CONTAINS(tags, ('foo'))`, want: `array-functions`},
+	}
+	for _, tc := range cases {
+		_, err := ParseText(tc.input)
+		assertParseErrorContains(t, err, tc.want)
+	}
+
+	_, err := ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},"A%"]}`))
+	assertParseErrorContains(t, err, `advanced-comparison-operators`)
+	_, err = ParseJSON([]byte(`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[1,2]}]}`))
+	assertParseErrorContains(t, err, `spatial conformance`)
+}
+
 func TestWithConformanceUsesOnlyClassFunctionsWhenNoExplicitFunctions(t *testing.T) {
 	parser := NewParser(WithConformance(ConformanceBasicCQL2))
 	if got := parser.SupportedFunctions(); len(got) != 0 {
@@ -70,7 +95,7 @@ func TestStandardFunctionsForConformance(t *testing.T) {
 		t.Fatalf("array functions = %#v, want %#v", got, want)
 	}
 
-	parser := NewParser(WithConformance(ConformanceBasicSpatialFunctions))
+	parser := NewParser(WithConformance(ConformanceBasicSpatialFunctions, ConformancePropertyProperty))
 	if _, err := parser.ParseText(`TRUE = s_intersects(geom, BBOX(0, 0, 1, 1))`); err != nil {
 		t.Fatalf("spatial function in scalar context: %v", err)
 	}

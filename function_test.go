@@ -128,13 +128,13 @@ func TestFunctionReturnContexts(t *testing.T) {
 		{Name: "bool_fn", Returns: []FunctionType{FunctionTypeBoolean}},
 	}
 
-	if _, err := ParseJSON([]byte(`{"op":"like","args":[{"op":"str_fn","args":[]},"x"]}`), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := ParseJSON([]byte(`{"op":"like","args":[{"op":"str_fn","args":[]},"x"]}`), WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
 		t.Fatalf("string-returning JSON function in character context: %v", err)
 	}
-	if _, err := ParseJSON([]byte(`{"op":">","args":[{"op":"num_fn","args":[]},1]}`), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := ParseJSON([]byte(`{"op":">","args":[{"op":"num_fn","args":[]},1]}`), WithConformance(ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
 		t.Fatalf("number-returning JSON function in numeric comparison: %v", err)
 	}
-	if _, err := ParseText(`num_fn() > 1`, WithAllowedFunctions(defs...)); err != nil {
+	if _, err := ParseText(`num_fn() > 1`, WithConformance(ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
 		t.Fatalf("number-returning text function in numeric comparison: %v", err)
 	}
 	if _, err := ParseText(`bool_fn()`, WithAllowedFunctions(defs...)); err != nil {

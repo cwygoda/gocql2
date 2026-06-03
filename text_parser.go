@@ -87,12 +87,21 @@ func (p *textParser) parseNot(depth int) (Expression, error) {
 func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 	if p.peek().kind == tokenKeyword {
 		if op, ok := isSpatialPredicateOp(p.peek().text); ok {
+			if !p.cfg.conformance.allowsSpatialPredicate(op) {
+				return nil, p.errorHere("spatial predicate requires spatial conformance")
+			}
 			return p.parseSpatialPredicate(op, depth+1)
 		}
 		if op, ok := isTemporalPredicateOp(p.peek().text); ok {
+			if !p.cfg.conformance.allowsTemporalPredicate(op) {
+				return nil, p.errorHere("temporal predicate requires temporal-functions conformance")
+			}
 			return p.parseTemporalPredicate(op, depth+1)
 		}
 		if op, ok := isArrayPredicateOp(p.peek().text); ok {
+			if !p.cfg.conformance.allowsArrayPredicate(op) {
+				return nil, p.errorHere("array predicate requires array-functions conformance")
+			}
 			return p.parseArrayPredicate(op, depth+1)
 		}
 		if isGeometryKeyword(p.peek()) {
@@ -147,12 +156,23 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if err := validateComparisonOperands(op, left, right, LanguageText); err != nil {
 			return nil, err
 		}
+		if err := validatePropertyPropertyConformance(p.cfg, LanguageText, left, right); err != nil {
+			return nil, err
+		}
 		return &ComparisonExpression{Op: op, Left: left, Right: right, Src: Span{Start: left.Span().Start, End: right.Span().End}}, nil
+	}
+	if !p.cfg.conformance.arithmetic {
+		if _, _, ok := p.peekArithmeticOperator(); ok {
+			return nil, p.errorHere("arithmetic requires arithmetic conformance")
+		}
 	}
 
 	not := p.matchKeyword("NOT")
 
 	if p.matchKeyword("LIKE") {
+		if !p.cfg.conformance.advancedComparisonOperators {
+			return nil, p.errorPrevious("LIKE requires advanced-comparison-operators conformance")
+		}
 		if !isCharacterExpression(left) {
 			return nil, parseError(LanguageText, left.Span().Start, "LIKE left operand must be a character expression")
 		}
@@ -160,9 +180,15 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := validatePropertyPropertyConformance(p.cfg, LanguageText, left, pattern); err != nil {
+			return nil, err
+		}
 		return &LikeExpression{Expr: left, Pattern: pattern, Not: not, Src: Span{Start: left.Span().Start, End: pattern.Span().End}}, nil
 	}
 	if p.matchKeyword("BETWEEN") {
+		if !p.cfg.conformance.advancedComparisonOperators {
+			return nil, p.errorPrevious("BETWEEN requires advanced-comparison-operators conformance")
+		}
 		if !isNumericExpression(left) {
 			return nil, parseError(LanguageText, left.Span().Start, "BETWEEN operands must be numeric expressions")
 		}
@@ -177,9 +203,15 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := validatePropertyPropertyConformance(p.cfg, LanguageText, left, lower, upper); err != nil {
+			return nil, err
+		}
 		return &BetweenExpression{Expr: left, Lower: lower, Upper: upper, Not: not, Src: Span{Start: left.Span().Start, End: upper.Span().End}}, nil
 	}
 	if p.matchKeyword("IN") {
+		if !p.cfg.conformance.advancedComparisonOperators {
+			return nil, p.errorPrevious("IN requires advanced-comparison-operators conformance")
+		}
 		if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {
 			return nil, err
 		}
@@ -204,6 +236,9 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 			return nil, parseError(LanguageText, end.span.Start, "IN list must not be empty")
 		}
 		if err := validateInOperands(left, values, LanguageText); err != nil {
+			return nil, err
+		}
+		if err := validatePropertyPropertyConformance(p.cfg, LanguageText, append([]ScalarExpression{left}, values...)...); err != nil {
 			return nil, err
 		}
 		return &InExpression{Expr: left, Values: values, Not: not, Src: Span{Start: left.Span().Start, End: end.span.End}}, nil
@@ -303,7 +338,10 @@ func (p *textParser) parseNumericExpression(depth int) (ScalarExpression, error)
 }
 
 func (p *textParser) parseScalar(depth int) (ScalarExpression, error) {
-	return p.parseArithmeticExpression(depth+1, 0)
+	if p.cfg.conformance.arithmetic {
+		return p.parseArithmeticExpression(depth+1, 0)
+	}
+	return p.parseScalarPrimary(depth + 1)
 }
 
 func (p *textParser) parseArithmeticExpression(depth, minPrecedence int) (ScalarExpression, error) {
@@ -389,6 +427,9 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 		if tok.text != "-" && tok.text != "+" {
 			return nil, p.errorHere("expected scalar expression", "property", "literal", "function")
 		}
+		if !p.cfg.conformance.arithmetic {
+			return nil, p.errorHere("arithmetic requires arithmetic conformance")
+		}
 		p.advance()
 		operand, err := p.parseScalarPrimary(depth + 1)
 		if err != nil {
@@ -404,7 +445,13 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 		return &ArithmeticExpression{Op: ArithmeticSub, Left: zero, Right: operand, Src: Span{Start: tok.span.Start, End: operand.Span().End}}, nil
 	case tokenLParen:
 		p.advance()
-		inner, err := p.parseArithmeticExpression(depth+1, 0)
+		var inner ScalarExpression
+		var err error
+		if p.cfg.conformance.arithmetic {
+			inner, err = p.parseArithmeticExpression(depth+1, 0)
+		} else {
+			inner, err = p.parseScalar(depth + 1)
+		}
 		if err != nil {
 			return nil, err
 		}

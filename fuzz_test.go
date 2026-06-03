@@ -81,7 +81,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf("ACCENTI(CASEI(name)) LIKE accenti(casei(%s))", textLiteral),
 		}
 		for _, input := range textInputs {
-			if _, err := ParseText(input, WithMaxDepth(32), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
+			if _, err := ParseText(input, WithMaxDepth(32), WithConformance(ConformanceAdvancedComparisonOperators), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
 				t.Fatalf("ParseText(%q): %v", input, err)
 			}
 		}
@@ -96,7 +96,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf(`{"op":"like","args":[{"op":"accenti","args":[{"op":"casei","args":[{"property":"name"}]}]},{"op":"accenti","args":[{"op":"casei","args":[%s]}]}]}`, jsonLiteral),
 		}
 		for _, input := range jsonInputs {
-			if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
+			if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(ConformanceAdvancedComparisonOperators), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
 				t.Fatalf("ParseJSON(%s): %v", input, err)
 			}
 		}
@@ -130,12 +130,12 @@ func FuzzSpatialPredicatesDoNotPanic(f *testing.F) {
 		}
 
 		text := fmt.Sprintf("%s(geom,POINT(%g %g))", strings.ToUpper(op), x, y)
-		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+		if _, err := ParseText(text, WithMaxDepth(32), WithConformance(ConformanceSpatialFunctions)); err != nil {
 			t.Fatalf("ParseText(%q): %v", text, err)
 		}
 
 		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"geom"},{"type":"Point","coordinates":[%g,%g]}]}`, op, x, y)
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+		if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(ConformanceSpatialFunctions)); err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
 	})
@@ -161,7 +161,7 @@ func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 		}
 
 		text := fmt.Sprintf("%s(tags, (%s, %s))", strings.ToUpper(op), cqlTextString(first), cqlTextString(second))
-		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+		if _, err := ParseText(text, WithMaxDepth(32), WithConformance(ConformanceArrayFunctions)); err != nil {
 			t.Fatalf("ParseText(%q): %v", text, err)
 		}
 
@@ -178,7 +178,7 @@ func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 			jsonOp = "a_containedBy"
 		}
 		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"tags"},[%s,%s]]}`, jsonOp, jsonFirst, jsonSecond)
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+		if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(ConformanceArrayFunctions)); err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
 	})

@@ -51,7 +51,7 @@ func TestParseJSONInLists(t *testing.T) {
 		`{"op":"in","args":[{"property":"status"},[]]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input))
+		expr, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -60,7 +60,7 @@ func TestParseJSONInLists(t *testing.T) {
 		}
 	}
 
-	_, err := ParseJSON([]byte(`{"op":"in","args":[{"property":"status"},["ok",null]]}`))
+	_, err := ParseJSON([]byte(`{"op":"in","args":[{"property":"status"},["ok",null]]}`), WithConformance(ConformanceAdvancedComparisonOperators))
 	assertParseErrorContains(t, err, "NULL is only allowed")
 }
 
@@ -74,10 +74,13 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 		{input: `{"op":"a_equals","args":[{"property":"tags"},[1,{"op":"+","args":[2,3]},true]]}`, op: ArrayOpEquals},
 		{input: `{"op":"a_overlaps","args":[{"op":"get_tags","args":[]},[["nested"],{"op":"=","args":[{"property":"status"},"new"]}]]}`, op: ArrayOpOverlaps},
 	}
-	parser := NewParser(WithAllowedFunctions(FunctionDefinition{
-		Name:    "get_tags",
-		Returns: []FunctionType{FunctionTypeArray},
-	}))
+	parser := NewParser(
+		WithConformance(ConformanceArrayFunctions, ConformanceArithmetic),
+		WithAllowedFunctions(FunctionDefinition{
+			Name:    "get_tags",
+			Returns: []FunctionType{FunctionTypeArray},
+		}),
+	)
 	for _, tc := range cases {
 		expr, err := parser.ParseJSON([]byte(tc.input))
 		if err != nil {
@@ -92,27 +95,27 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"a_containedby","args":[[],{"property":"tags"}]}`))
 	assertParseErrorContains(t, err, `function "a_containedby" is not allowed`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`), WithAllowedProperties(
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`), WithConformance(ConformanceArrayFunctions), WithAllowedProperties(
 		PropertyDefinition{Name: "name", Type: PropertyTypeString},
 	))
 	assertParseErrorContains(t, err, `cannot be used as an array operand`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"tags"},"foo"]}`))
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"tags"},"foo"]}`), WithConformance(ConformanceArrayFunctions))
 	assertParseErrorContains(t, err, `expected array operand`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[]]}`))
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[]]}`), WithConformance(ConformanceArrayFunctions))
 	assertParseErrorContains(t, err, `expected exactly 2 arguments`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{},[]]}`))
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{},[]]}`), WithConformance(ConformanceArrayFunctions))
 	assertParseErrorContains(t, err, `expected scalar expression`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[],{"op":"bad_fn","args":[]}]}`), WithAllowedFunctions(FunctionDefinition{
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[],{"op":"bad_fn","args":[]}]}`), WithConformance(ConformanceArrayFunctions), WithAllowedFunctions(FunctionDefinition{
 		Name:    "bad_fn",
 		Returns: []FunctionType{FunctionTypeString},
 	}))
 	assertParseErrorContains(t, err, `does not return array`)
 
-	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[["foo"]],[]]}`), WithMaxDepth(1))
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[[["foo"]],[]]}`), WithConformance(ConformanceArrayFunctions), WithMaxDepth(1))
 	assertParseErrorContains(t, err, `maximum parse depth exceeded`)
 }
 
@@ -123,7 +126,7 @@ func TestParseJSONBetweenNumericExpressions(t *testing.T) {
 		`{"op":"between","args":[{"op":"+","args":[{"property":"height"},1]},{"property":"min_height"},{"op":"*","args":[{"property":"max_height"},2]}]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input))
+		expr, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -136,7 +139,7 @@ func TestParseJSONBetweenNumericExpressions(t *testing.T) {
 		`{"op":"between","args":["x",1,2]}`,
 		`{"op":"between","args":[{"property":"height"},"a",2]}`,
 	} {
-		_, err := ParseJSON([]byte(input))
+		_, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators))
 		assertParseErrorContains(t, err, "numeric")
 	}
 }
@@ -148,7 +151,7 @@ func TestParseJSONLikeLiteralPatterns(t *testing.T) {
 		`{"op":"like","args":[{"op":"accenti","args":[{"property":"name"}]},{"op":"accenti","args":["é%"]}]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input), WithAllowedFunctions(StandardTextFunctions()...))
+		expr, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators), WithAllowedFunctions(StandardTextFunctions()...))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -161,10 +164,10 @@ func TestParseJSONLikeLiteralPatterns(t *testing.T) {
 		`{"op":"like","args":[{"property":"name"},{"property":"other"}]}`,
 		`{"op":"like","args":[{"property":"name"},{"op":"custom","args":["x"]}]}`,
 	} {
-		_, err := ParseJSON([]byte(input))
+		_, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators))
 		assertParseErrorContains(t, err, "LIKE")
 	}
-	_, err := ParseJSON([]byte(`{"op":"like","args":[1,"x"]}`))
+	_, err := ParseJSON([]byte(`{"op":"like","args":[1,"x"]}`), WithConformance(ConformanceAdvancedComparisonOperators))
 	assertParseErrorContains(t, err, "expected character expression")
 }
 
@@ -177,7 +180,7 @@ func TestParseJSONIsNullOperands(t *testing.T) {
 		`{"op":"isNull","args":[{"type":"Point","coordinates":[1,2]}]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input))
+		expr, err := ParseJSON([]byte(input), WithConformance(ConformanceArithmetic))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -197,7 +200,7 @@ func TestParseJSONBooleanComparisons(t *testing.T) {
 		`{"op":"=","args":[true,false]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input))
+		expr, err := ParseJSON([]byte(input), WithConformance(ConformancePropertyProperty))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -264,7 +267,7 @@ func TestParseJSONFunctionRegistry(t *testing.T) {
 }
 
 func TestParseJSONArithmetic(t *testing.T) {
-	expr, err := ParseJSON([]byte(`{"op":">=","args":[{"op":"*","args":[{"op":"+","args":[{"property":"a"},1]},2]},{"op":"div","args":[{"property":"b"},3]}]}`))
+	expr, err := ParseJSON([]byte(`{"op":">=","args":[{"op":"*","args":[{"op":"+","args":[{"property":"a"},1]},2]},{"op":"div","args":[{"property":"b"},3]}]}`), WithConformance(ConformanceArithmetic, ConformancePropertyProperty))
 	if err != nil {
 		t.Fatalf("ParseJSON arithmetic: %v", err)
 	}
@@ -284,7 +287,7 @@ func TestParseJSONArithmetic(t *testing.T) {
 	_, err = ParseJSON([]byte(`{"op":"+","args":[1]}`))
 	assertParseErrorContains(t, err, `unsupported reserved operation "+"`)
 
-	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"+","args":["a",1]}]}`))
+	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"+","args":["a",1]}]}`), WithConformance(ConformanceArithmetic))
 	assertParseErrorContains(t, err, "expected numeric expression")
 }
 
@@ -292,7 +295,7 @@ func TestParseJSONDepthLimit(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"not","args":[{"op":"not","args":[true]}]}`), WithMaxDepth(1))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 
-	_, err = ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},{"op":"casei","args":[{"op":"casei","args":["x"]}]}]}`), WithMaxDepth(1), WithAllowedFunctions(CaseIFunction()))
+	_, err = ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},{"op":"casei","args":[{"op":"casei","args":["x"]}]}]}`), WithMaxDepth(1), WithConformance(ConformanceAdvancedComparisonOperators), WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 }
 
@@ -332,7 +335,7 @@ func TestParseJSONRejectsInvalidOperandShapes(t *testing.T) {
 		`{"op":"casei","args":["a","b"]}`:                       "is not a boolean expression",
 	}
 	for input, want := range cases {
-		_, err := ParseJSON([]byte(input))
+		_, err := ParseJSON([]byte(input), WithConformance(ConformanceAdvancedComparisonOperators))
 		assertParseErrorContains(t, err, want)
 	}
 

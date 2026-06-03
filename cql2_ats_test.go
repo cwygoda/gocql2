@@ -224,11 +224,15 @@ func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "tags")
-	s.parsed, s.parseErr = ParseText(filter, WithAllowedProperties(
-		PropertyDefinition{Name: "tags", Type: PropertyTypeArray},
-		PropertyDefinition{Name: "foo", Type: PropertyTypeString},
-		PropertyDefinition{Name: "bar", Type: PropertyTypeString},
-	))
+	s.parsed, s.parseErr = ParseText(
+		filter,
+		WithConformance(ConformanceArrayFunctions),
+		WithAllowedProperties(
+			PropertyDefinition{Name: "tags", Type: PropertyTypeArray},
+			PropertyDefinition{Name: "foo", Type: PropertyTypeString},
+			PropertyDefinition{Name: "bar", Type: PropertyTypeString},
+		),
+	)
 	return s.parseErr
 }
 
@@ -252,9 +256,13 @@ func (s *cql2ATSSuite) iEvaluateTheSpatialPredicateTemplate(filter string) error
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "geom")
-	s.parsed, s.parseErr = ParseText(filter, WithAllowedProperties(
-		PropertyDefinition{Name: "geom", Type: PropertyTypeGeometry},
-	))
+	s.parsed, s.parseErr = ParseText(
+		filter,
+		WithConformance(ConformanceSpatialFunctions),
+		WithAllowedProperties(
+			PropertyDefinition{Name: "geom", Type: PropertyTypeGeometry},
+		),
+	)
 	s.spatialFilters = append(s.spatialFilters, filter)
 	s.spatialParseErrs = append(s.spatialParseErrs, s.parseErr)
 	return nil
@@ -282,11 +290,15 @@ func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(filter string) erro
 	filter = strings.ReplaceAll(filter, "{queryable1}", "start_time")
 	filter = strings.ReplaceAll(filter, "{queryable2}", "end_time")
 	filter = strings.ReplaceAll(filter, "{queryable}", "event_time")
-	s.parsed, s.parseErr = ParseText(filter, WithAllowedProperties(
-		PropertyDefinition{Name: "event_time", Type: PropertyTypeAny},
-		PropertyDefinition{Name: "start_time", Type: PropertyTypeAny},
-		PropertyDefinition{Name: "end_time", Type: PropertyTypeAny},
-	))
+	s.parsed, s.parseErr = ParseText(
+		filter,
+		WithConformance(ConformanceTemporalFunctions),
+		WithAllowedProperties(
+			PropertyDefinition{Name: "event_time", Type: PropertyTypeAny},
+			PropertyDefinition{Name: "start_time", Type: PropertyTypeAny},
+			PropertyDefinition{Name: "end_time", Type: PropertyTypeAny},
+		),
+	)
 	return s.parseErr
 }
 

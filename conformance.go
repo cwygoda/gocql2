@@ -52,11 +52,64 @@ var conformanceBySlug = map[string]string{
 // implementation-specific functions.
 func WithConformance(classes ...string) ParseOption {
 	return func(p *Parser) {
-		p.conformanceClasses = canonicalConformanceClasses(classes)
-		defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), StandardFunctionsForConformance(classes...))
+		canonical := canonicalConformanceClasses(classes)
+		p.conformanceClasses = canonical
+		p.cfg.conformance = conformanceCapabilitiesForClasses(canonical...)
+		defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), StandardFunctionsForConformance(canonical...))
 		p.supportedFunctions = functionNames(defs)
 		p.cfg.functions = newFunctionRegistry(defs)
 	}
+}
+
+type conformanceCapabilities struct {
+	advancedComparisonOperators bool
+	basicSpatialFunctions       bool
+	basicSpatialFunctionsPlus   bool
+	spatialFunctions            bool
+	temporalFunctions           bool
+	arrayFunctions              bool
+	propertyProperty            bool
+	arithmetic                  bool
+}
+
+func conformanceCapabilitiesForClasses(classes ...string) conformanceCapabilities {
+	var caps conformanceCapabilities
+	for _, class := range canonicalConformanceClasses(classes) {
+		switch class {
+		case ConformanceAdvancedComparisonOperators:
+			caps.advancedComparisonOperators = true
+		case ConformanceBasicSpatialFunctions:
+			caps.basicSpatialFunctions = true
+		case ConformanceBasicSpatialFunctionsPlus:
+			caps.basicSpatialFunctionsPlus = true
+		case ConformanceSpatialFunctions:
+			caps.spatialFunctions = true
+		case ConformanceTemporalFunctions:
+			caps.temporalFunctions = true
+		case ConformanceArrayFunctions:
+			caps.arrayFunctions = true
+		case ConformancePropertyProperty:
+			caps.propertyProperty = true
+		case ConformanceArithmetic:
+			caps.arithmetic = true
+		}
+	}
+	return caps
+}
+
+func (c conformanceCapabilities) allowsSpatialPredicate(op SpatialPredicateOp) bool {
+	if c.spatialFunctions {
+		return true
+	}
+	return (c.basicSpatialFunctions || c.basicSpatialFunctionsPlus) && op == SpatialOpIntersects
+}
+
+func (c conformanceCapabilities) allowsTemporalPredicate(TemporalPredicateOp) bool {
+	return c.temporalFunctions
+}
+
+func (c conformanceCapabilities) allowsArrayPredicate(ArrayPredicateOp) bool {
+	return c.arrayFunctions
 }
 
 // StandardFunctionsForConformance returns the CQL2-standard function
