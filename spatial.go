@@ -349,12 +349,15 @@ func (p *textParser) parseTextCoordinate() (Coordinate, error) {
 	if err != nil {
 		return Coordinate{}, err
 	}
+	coord := Coordinate{X: x, Y: y}
 	if p.atTextNumber() {
-		if _, err := p.parseTextNumber(); err != nil {
+		z, err := p.parseTextNumber()
+		if err != nil {
 			return Coordinate{}, err
 		}
+		coord.Z = z
+		coord.HasZ = true
 	}
-	coord := Coordinate{X: x, Y: y}
 	if err := validateCoordinate(coord); err != nil {
 		return Coordinate{}, parseError(LanguageText, p.previous().span.Start, err.Error())
 	}
@@ -793,12 +796,15 @@ func parseJSONCoordinate(raw json.RawMessage, path JSONPath) (Coordinate, error)
 	if err != nil {
 		return Coordinate{}, err
 	}
+	coord := Coordinate{X: x, Y: y}
 	if len(items) == 3 {
-		if _, err := parseJSONNumber(items[2], path.Index(2)); err != nil {
+		z, err := parseJSONNumber(items[2], path.Index(2))
+		if err != nil {
 			return Coordinate{}, err
 		}
+		coord.Z = z
+		coord.HasZ = true
 	}
-	coord := Coordinate{X: x, Y: y}
 	if err := validateCoordinate(coord); err != nil {
 		return Coordinate{}, jsonPathError(path, err.Error())
 	}
