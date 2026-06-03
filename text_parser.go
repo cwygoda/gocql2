@@ -95,6 +95,16 @@ func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 		if op, ok := isArrayPredicateOp(p.peek().text); ok {
 			return p.parseArrayPredicate(op, depth+1)
 		}
+		if isGeometryKeyword(p.peek()) {
+			operand, err := p.parseTextGeometryLiteral(depth + 1)
+			if err != nil {
+				return nil, err
+			}
+			if p.matchKeyword("IS") {
+				return p.finishIsNull(operand)
+			}
+			return nil, p.errorHere("expected predicate operator", "IS")
+		}
 		if p.peek().text == "INTERVAL" {
 			operand, err := p.parseTemporalInstance(depth + 1)
 			if err != nil {
