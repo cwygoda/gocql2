@@ -27,9 +27,8 @@ var temporalPredicateOps = map[string]TemporalPredicateOp{
 }
 
 var (
-	dateLiteralPattern             = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-	strictTimestampLiteralPattern  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$`)
-	relaxedTimestampLiteralPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$`)
+	dateLiteralPattern      = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	timestampLiteralPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$`)
 )
 
 func isTemporalPredicateOp(name string) (TemporalPredicateOp, bool) {
@@ -48,18 +47,18 @@ func isIntervalOnlyTemporalPredicate(op TemporalPredicateOp) bool {
 	}
 }
 
-func temporalInstantKindFromString(value string, strictUTC bool) (TemporalInstantKind, error) {
+func temporalInstantKindFromString(value string) (TemporalInstantKind, error) {
 	if value == ".." {
 		return "", fmt.Errorf("unbounded marker is only allowed as an interval endpoint")
 	}
 	if err := validateDateLiteral(value); err == nil {
 		return TemporalInstantDate, nil
 	}
-	if err := validateTimestampLiteral(value, strictUTC); err == nil {
+	if err := validateTimestampLiteral(value); err == nil {
 		return TemporalInstantTimestamp, nil
 	}
 	if strings.Contains(value, "T") {
-		return "", validateTimestampLiteral(value, strictUTC)
+		return "", validateTimestampLiteral(value)
 	}
 	return "", validateDateLiteral(value)
 }
@@ -74,15 +73,9 @@ func validateDateLiteral(value string) error {
 	return nil
 }
 
-func validateTimestampLiteral(value string, strictUTC bool) error {
-	pattern := relaxedTimestampLiteralPattern
-	message := "timestamp must be an RFC3339 timestamp"
-	if strictUTC {
-		pattern = strictTimestampLiteralPattern
-		message = "timestamp must be an RFC3339 UTC timestamp ending in Z"
-	}
-	if !pattern.MatchString(value) {
-		return errors.New(message)
+func validateTimestampLiteral(value string) error {
+	if !timestampLiteralPattern.MatchString(value) {
+		return errors.New("timestamp must be an RFC3339 UTC timestamp ending in Z")
 	}
 	if _, err := time.Parse(time.RFC3339Nano, value); err != nil {
 		return fmt.Errorf("invalid timestamp %q", value)

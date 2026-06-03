@@ -543,7 +543,7 @@ func (p *textParser) parseTemporalInstantFunction(depth int) (*TemporalInstant, 
 		if err := validateDateLiteral(valueTok.text); err != nil {
 			return nil, parseError(LanguageText, valueTok.span.Start, err.Error())
 		}
-	} else if err := validateTimestampLiteral(valueTok.text, p.cfg.StrictTimestampUTC); err != nil {
+	} else if err := validateTimestampLiteral(valueTok.text); err != nil {
 		return nil, parseError(LanguageText, valueTok.span.Start, err.Error())
 	}
 	return &TemporalInstant{Kind: kind, Value: valueTok.text, Src: Span{Start: nameTok.span.Start, End: end.span.End}}, nil
@@ -587,7 +587,7 @@ func (p *textParser) parseTemporalIntervalEndpoint(depth int) (Node, error) {
 		if tok.text == ".." {
 			return &TemporalUnbounded{Src: tok.span}, nil
 		}
-		kind, err := temporalInstantKindFromString(tok.text, p.cfg.StrictTimestampUTC)
+		kind, err := temporalInstantKindFromString(tok.text)
 		if err != nil {
 			return nil, parseError(LanguageText, tok.span.Start, err.Error())
 		}

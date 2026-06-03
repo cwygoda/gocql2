@@ -12,8 +12,7 @@ type ParseConfig struct {
 	properties propertyRegistry
 	functions  functionRegistry
 
-	MaxDepth           int
-	StrictTimestampUTC bool
+	MaxDepth int
 }
 
 // Parser parses CQL2 and exposes the capabilities it was configured with.
@@ -49,13 +48,6 @@ func NewParser(opts ...ParseOption) *Parser {
 // WithMaxDepth limits recursive parse depth.
 func WithMaxDepth(n int) ParseOption {
 	return func(p *Parser) { p.cfg.MaxDepth = n }
-}
-
-// WithStrictTimestampUTC requires CQL2 TIMESTAMP values to use UTC (a trailing
-// "Z"). The default is false, which accepts RFC3339 timestamps with either a
-// UTC designator or numeric UTC offset.
-func WithStrictTimestampUTC(strict bool) ParseOption {
-	return func(p *Parser) { p.cfg.StrictTimestampUTC = strict }
 }
 
 // WithSupportedProperties records the parser's advertised property set and

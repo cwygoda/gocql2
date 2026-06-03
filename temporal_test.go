@@ -16,7 +16,7 @@ func TestTemporalPredicatesTextAndJSON(t *testing.T) {
 		{name: "before date", text: `T_BEFORE(event_date,DATE('2022-04-24'))`, json: `{"op":"t_before","args":[{"property":"event_date"},{"date":"2022-04-24"}]}`, op: TemporalOpBefore},
 		{name: "disjoint interval", text: `T_DISJOINT(event_time,INTERVAL('2021-01-01T00:00:00Z','2021-12-31T23:59:59Z'))`, json: `{"op":"t_disjoint","args":[{"property":"event_time"},{"interval":["2021-01-01T00:00:00Z","2021-12-31T23:59:59Z"]}]}`, op: TemporalOpDisjoint},
 		{name: "equals interval", text: `T_EQUALS(INTERVAL(start_time,end_time),INTERVAL('2021-01-01','2021-12-31'))`, json: `{"op":"t_equals","args":[{"interval":[{"property":"start_time"},{"property":"end_time"}]},{"interval":["2021-01-01","2021-12-31"]}]}`, op: TemporalOpEquals},
-		{name: "intersects offset", text: `T_INTERSECTS(event_time,TIMESTAMP('2022-04-24T09:59:57+02:00'))`, json: `{"op":"t_intersects","args":[{"property":"event_time"},{"timestamp":"2022-04-24T09:59:57+02:00"}]}`, op: TemporalOpIntersects},
+		{name: "intersects timestamp", text: `T_INTERSECTS(event_time,TIMESTAMP('2022-04-24T07:59:57Z'))`, json: `{"op":"t_intersects","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`, op: TemporalOpIntersects},
 		{name: "contains", text: `T_CONTAINS(INTERVAL(start_time,end_time),INTERVAL('2021-01-01','2021-12-31'))`, json: `{"op":"t_contains","args":[{"interval":[{"property":"start_time"},{"property":"end_time"}]},{"interval":["2021-01-01","2021-12-31"]}]}`, op: TemporalOpContains},
 		{name: "during", text: `T_DURING(INTERVAL(start_time,end_time),INTERVAL('2021-01-01','2021-12-31'))`, json: `{"op":"t_during","args":[{"interval":[{"property":"start_time"},{"property":"end_time"}]},{"interval":["2021-01-01","2021-12-31"]}]}`, op: TemporalOpDuring},
 		{name: "finishedBy", text: `T_FINISHEDBY(INTERVAL(start_time,end_time),INTERVAL('2021-01-01','2021-12-31'))`, json: `{"op":"t_finishedBy","args":[{"interval":[{"property":"start_time"},{"property":"end_time"}]},{"interval":["2021-01-01","2021-12-31"]}]}`, op: TemporalOpFinishedBy},
@@ -97,14 +97,15 @@ func TestTemporalLiteralsInScalarAndValueContexts(t *testing.T) {
 	}
 }
 
-func TestStrictTimestampUTCOption(t *testing.T) {
-	if _, err := ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`); err != nil {
-		t.Fatalf("default relaxed timestamp offset should parse: %v", err)
-	}
-	_, err := ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`, WithStrictTimestampUTC(true))
+func TestTimestampRequiresUTC(t *testing.T) {
+	_, err := ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`)
 	assertParseErrorContains(t, err, "ending in Z")
-	if _, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`), WithStrictTimestampUTC(true)); err != nil {
-		t.Fatalf("strict UTC Z timestamp should parse: %v", err)
+
+	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T09:59:57+02:00"}]}`))
+	assertParseErrorContains(t, err, "ending in Z")
+
+	if _, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`)); err != nil {
+		t.Fatalf("UTC Z timestamp should parse: %v", err)
 	}
 }
 
