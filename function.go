@@ -99,7 +99,7 @@ func newFunctionRegistry(defs []FunctionDefinition) functionRegistry {
 }
 
 func functionRegistryDefaults() functionRegistry {
-	return newFunctionRegistry(StandardTextFunctions())
+	return newFunctionRegistry(nil)
 }
 
 func (r functionRegistry) lookup(name string) (FunctionDefinition, bool) {

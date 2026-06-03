@@ -3,7 +3,7 @@ package gocql2
 import "testing"
 
 func TestFunctionRegistryValidationEdges(t *testing.T) {
-	_, err := ParseText(`casei() = 'x'`)
+	_, err := ParseText(`casei() = 'x'`, WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, `function "casei" expects exactly 1 arguments`)
 
 	variadic := FunctionDefinition{
@@ -29,8 +29,8 @@ func TestFunctionRegistryValidationEdges(t *testing.T) {
 		}
 	}
 
-	if _, ok := (functionRegistry{}).lookup("casei"); !ok {
-		t.Fatal("zero-value function registry did not use standard defaults")
+	if _, ok := (functionRegistry{}).lookup("casei"); ok {
+		t.Fatal("zero-value function registry allowed standard functions by default")
 	}
 	if _, ok := newFunctionRegistry([]FunctionDefinition{{Name: "", Returns: []FunctionType{FunctionTypeString}}}).lookup(""); ok {
 		t.Fatal("empty function name was registered")
@@ -115,10 +115,10 @@ func TestFunctionReturnContexts(t *testing.T) {
 }
 
 func TestParseConfigDefaultsForDirectParsers(t *testing.T) {
-	if _, err := parseText(`CASEI(name) = casei('x')`, ParseConfig{}); err != nil {
+	if _, err := parseText(`name = 'x'`, ParseConfig{}); err != nil {
 		t.Fatalf("parseText with zero ParseConfig: %v", err)
 	}
-	if _, err := parseJSON([]byte(`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["x"]}]}`), ParseConfig{}); err != nil {
+	if _, err := parseJSON([]byte(`{"op":"=","args":[{"property":"name"},"x"]}`), ParseConfig{}); err != nil {
 		t.Fatalf("parseJSON with zero ParseConfig: %v", err)
 	}
 }

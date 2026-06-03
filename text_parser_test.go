@@ -216,7 +216,7 @@ func TestParseTextLikeLiteralPatterns(t *testing.T) {
 		`ACCENTI(name) LIKE ACCENTI('é%')`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input)
+		expr, err := ParseText(input, WithAllowedFunctions(StandardTextFunctions()...))
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -278,7 +278,7 @@ func TestParseTextPredicates(t *testing.T) {
 		{input: `CASEI(name) = CASEI('foo')`, want: &ComparisonExpression{}},
 	}
 	for _, tc := range cases {
-		expr, err := ParseText(tc.input)
+		expr, err := ParseText(tc.input, WithAllowedFunctions(StandardTextFunctions()...))
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", tc.input, err)
 		}
@@ -323,10 +323,10 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 	_, err = ParseText(`custom(name, 1)`)
 	assertParseErrorContains(t, err, `function "custom" is not allowed`)
 
-	_, err = ParseText(`CASEI(1) = '1'`)
+	_, err = ParseText(`CASEI(1) = '1'`, WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, `expected string`)
 
-	_, err = ParseText(`CASEI(name)`)
+	_, err = ParseText(`CASEI(name)`, WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, `expected predicate operator`)
 
 	boolFn := FunctionDefinition{

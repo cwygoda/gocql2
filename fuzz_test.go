@@ -81,7 +81,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf("ACCENTI(CASEI(name)) LIKE accenti(casei(%s))", textLiteral),
 		}
 		for _, input := range textInputs {
-			if _, err := ParseText(input, WithMaxDepth(32)); err != nil {
+			if _, err := ParseText(input, WithMaxDepth(32), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
 				t.Fatalf("ParseText(%q): %v", input, err)
 			}
 		}
@@ -96,7 +96,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf(`{"op":"like","args":[{"op":"accenti","args":[{"op":"casei","args":[{"property":"name"}]}]},{"op":"accenti","args":[{"op":"casei","args":[%s]}]}]}`, jsonLiteral),
 		}
 		for _, input := range jsonInputs {
-			if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+			if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithAllowedFunctions(StandardTextFunctions()...)); err != nil {
 				t.Fatalf("ParseJSON(%s): %v", input, err)
 			}
 		}
