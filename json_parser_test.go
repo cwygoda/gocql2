@@ -70,7 +70,7 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 		op    ArrayPredicateOp
 	}{
 		{input: `{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`, op: ArrayOpContains},
-		{input: `{"op":"a_containedby","args":[[],{"property":"tags"}]}`, op: ArrayOpContainedBy},
+		{input: `{"op":"a_containedBy","args":[[],{"property":"tags"}]}`, op: ArrayOpContainedBy},
 		{input: `{"op":"a_equals","args":[{"property":"tags"},[1,{"op":"+","args":[2,3]},true]]}`, op: ArrayOpEquals},
 		{input: `{"op":"a_overlaps","args":[{"op":"get_tags","args":[]},[["nested"],{"op":"=","args":[{"property":"status"},"new"]}]]}`, op: ArrayOpOverlaps},
 	}
@@ -89,7 +89,10 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 		}
 	}
 
-	_, err := ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`), WithAllowedProperties(
+	_, err := ParseJSON([]byte(`{"op":"a_containedby","args":[[],{"property":"tags"}]}`))
+	assertParseErrorContains(t, err, `function "a_containedby" is not allowed`)
+
+	_, err = ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`), WithAllowedProperties(
 		PropertyDefinition{Name: "name", Type: PropertyTypeString},
 	))
 	assertParseErrorContains(t, err, `cannot be used as an array operand`)

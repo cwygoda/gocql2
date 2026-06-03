@@ -173,7 +173,11 @@ func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 		if err != nil {
 			t.Fatalf("json.Marshal(%q): %v", second, err)
 		}
-		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"tags"},[%s,%s]]}`, op, jsonFirst, jsonSecond)
+		jsonOp := op
+		if op == "a_containedby" {
+			jsonOp = "a_containedBy"
+		}
+		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"tags"},[%s,%s]]}`, jsonOp, jsonFirst, jsonSecond)
 		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
