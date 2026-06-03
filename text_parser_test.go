@@ -82,18 +82,34 @@ func TestParseTextRejectsNonBooleanPrimary(t *testing.T) {
 	assertParseErrorContains(t, err, "expected predicate operator")
 }
 
-func TestParseTextParsesHyphenAsArithmetic(t *testing.T) {
-	expr, err := ParseText(`foo-bar = 1`)
-	if err != nil {
-		t.Fatalf("ParseText hyphen arithmetic: %v", err)
+func TestParseTextParsesAdjacentArithmeticOperators(t *testing.T) {
+	cases := []struct {
+		input string
+		op    ArithmeticOp
+	}{
+		{input: `foo-bar = 1`, op: ArithmeticSub},
+		{input: `a-1=2`, op: ArithmeticSub},
+		{input: `a - 1 = 2`, op: ArithmeticSub},
+		{input: `1-1=0`, op: ArithmeticSub},
+		{input: `1 - 1 = 0`, op: ArithmeticSub},
+		{input: `a+1=2`, op: ArithmeticAdd},
+		{input: `a + 1 = 2`, op: ArithmeticAdd},
+		{input: `1+1=2`, op: ArithmeticAdd},
+		{input: `1 + 1 = 2`, op: ArithmeticAdd},
 	}
-	cmp, ok := expr.(*ComparisonExpression)
-	if !ok {
-		t.Fatalf("expr = %T, want ComparisonExpression", expr)
-	}
-	arith, ok := cmp.Left.(*ArithmeticExpression)
-	if !ok || arith.Op != ArithmeticSub {
-		t.Fatalf("left = %#v, want subtraction", cmp.Left)
+	for _, tc := range cases {
+		expr, err := ParseText(tc.input)
+		if err != nil {
+			t.Fatalf("ParseText(%q): %v", tc.input, err)
+		}
+		cmp, ok := expr.(*ComparisonExpression)
+		if !ok {
+			t.Fatalf("%q parsed as %T, want ComparisonExpression", tc.input, expr)
+		}
+		arith, ok := cmp.Left.(*ArithmeticExpression)
+		if !ok || arith.Op != tc.op {
+			t.Fatalf("%q left = %#v, want %s", tc.input, cmp.Left, tc.op)
+		}
 	}
 }
 

@@ -386,7 +386,7 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 		}
 		return nil, parseError(LanguageText, tok.span.Start, fmt.Sprintf("reserved keyword %q cannot be used as an unquoted property name or function", tok.text), "identifier", "quoted identifier")
 	case tokenOperator:
-		if tok.text != "-" {
+		if tok.text != "-" && tok.text != "+" {
 			return nil, p.errorHere("expected scalar expression", "property", "literal", "function")
 		}
 		p.advance()
@@ -396,6 +396,9 @@ func (p *textParser) parseScalarPrimary(depth int) (ScalarExpression, error) {
 		}
 		if !isNumericExpression(operand) {
 			return nil, parseError(LanguageText, operand.Span().Start, "arithmetic operands must be numeric expressions")
+		}
+		if tok.text == "+" {
+			return operand, nil
 		}
 		zero := &Literal{Kind: LiteralNumber, Value: "0", Src: tok.span}
 		return &ArithmeticExpression{Op: ArithmeticSub, Left: zero, Right: operand, Src: Span{Start: tok.span.Start, End: operand.Span().End}}, nil

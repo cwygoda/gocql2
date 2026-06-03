@@ -40,6 +40,7 @@ func TestParseTextSpatialValidation(t *testing.T) {
 		`S_INTERSECTS(name,POINT(7 50))`:                                   "cannot be used as a spatial operand",
 		`S_INTERSECTS(geom,'POINT(7 50)')`:                                 "expected spatial operand",
 		`S_INTERSECTS(geom,GEOMETRYCOLLECTION())`:                          "geometry collection must not be empty",
+		`S_INTERSECTS(geom,POINT(1 - 2))`:                                  "expected number",
 		`S_INTERSECTS(geom,MULTIPOINT(7 50,90 180))`:                       "latitude must be between -90 and 90",
 		`S_INTERSECTS(geom,POLYGON((0 0,10 0,10 10,0 10,0 0)),POINT(0 0))`: "closing parenthesis",
 		`S_INTERSECTS(geom,BBOX(-180,-90,0,180,90))`:                       "exactly four or six numbers",

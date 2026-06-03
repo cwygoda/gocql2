@@ -344,7 +344,7 @@ func (p *textParser) parseTextCoordinate() (Coordinate, error) {
 	if err != nil {
 		return Coordinate{}, err
 	}
-	if p.at(tokenNumber, "") {
+	if p.atTextNumber() {
 		if _, err := p.parseTextNumber(); err != nil {
 			return Coordinate{}, err
 		}
@@ -356,14 +356,35 @@ func (p *textParser) parseTextCoordinate() (Coordinate, error) {
 	return coord, nil
 }
 
+func (p *textParser) atTextNumber() bool {
+	if p.at(tokenNumber, "") {
+		return true
+	}
+	return p.peekSignedTextNumber()
+}
+
+func (p *textParser) peekSignedTextNumber() bool {
+	if p.pos+1 >= len(p.tokens) {
+		return false
+	}
+	sign := p.peek()
+	number := p.tokens[p.pos+1]
+	return sign.kind == tokenOperator && (sign.text == "+" || sign.text == "-") && number.kind == tokenNumber && sign.span.End.ByteOffset == number.span.Start.ByteOffset
+}
+
 func (p *textParser) parseTextNumber() (float64, error) {
+	start := p.peek().span.Start
+	sign := ""
+	if p.peekSignedTextNumber() {
+		sign = p.advance().text
+	}
 	tok, err := p.expect(tokenNumber, "number")
 	if err != nil {
 		return 0, err
 	}
-	value, parseErr := strconv.ParseFloat(tok.text, 64)
+	value, parseErr := strconv.ParseFloat(sign+tok.text, 64)
 	if parseErr != nil {
-		return 0, parseError(LanguageText, tok.span.Start, "invalid numeric literal")
+		return 0, parseError(LanguageText, start, "invalid numeric literal")
 	}
 	return value, nil
 }

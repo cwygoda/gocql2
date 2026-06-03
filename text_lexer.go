@@ -29,11 +29,13 @@ type token struct {
 }
 
 type lexer struct {
-	input      string
-	byteOffset int
-	charOffset int
-	line       int
-	column     int
+	input        string
+	byteOffset   int
+	charOffset   int
+	line         int
+	column       int
+	previousKind tokenKind
+	hasPrevious  bool
 }
 
 var reservedTextKeywords = map[string]struct{}{
@@ -65,6 +67,8 @@ func lexText(input string) ([]token, error) {
 		if tok.kind == tokenEOF {
 			return tokens, nil
 		}
+		l.previousKind = tok.kind
+		l.hasPrevious = true
 	}
 }
 
@@ -90,7 +94,7 @@ func (l *lexer) nextToken() (token, error) {
 		return l.stringToken(start)
 	case r == '"':
 		return l.quotedIdentifierToken(start)
-	case isNumberStart(l.input[l.byteOffset:]):
+	case isNumberStart(l.input[l.byteOffset:], l.canStartSignedNumber()):
 		return l.numberToken(start)
 	case isIdentifierStart(r):
 		return l.identifierToken(start)
@@ -260,7 +264,19 @@ func (l *lexer) peekByte(b byte) bool {
 	return l.byteOffset < len(l.input) && l.input[l.byteOffset] == b
 }
 
-func isNumberStart(s string) bool {
+func (l *lexer) canStartSignedNumber() bool {
+	if !l.hasPrevious {
+		return true
+	}
+	switch l.previousKind {
+	case tokenOperator, tokenLParen, tokenComma, tokenKeyword:
+		return true
+	default:
+		return false
+	}
+}
+
+func isNumberStart(s string, allowSign bool) bool {
 	if s == "" {
 		return false
 	}
@@ -270,7 +286,7 @@ func isNumberStart(s string) bool {
 	if s[0] == '.' {
 		return len(s) > 1 && s[1] >= '0' && s[1] <= '9'
 	}
-	if s[0] == '+' || s[0] == '-' {
+	if allowSign && (s[0] == '+' || s[0] == '-') {
 		if len(s) < 2 {
 			return false
 		}
