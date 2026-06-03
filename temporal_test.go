@@ -160,6 +160,7 @@ func TestTemporalLiteralValidation(t *testing.T) {
 		{name: "json invalid timestamp", lang: LanguageJSON, in: `{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T25:59:57Z"}]}`, message: `invalid timestamp`},
 		{name: "text malformed timestamp", lang: LanguageText, in: `event_time = TIMESTAMP('2022-04-24 07:59:57')`, message: `timestamp must be`},
 		{name: "json malformed interval", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":["bad","2022-01-01"]},{"property":"event_date"}]}`, message: `date must match`},
+		{name: "json object instant interval endpoint", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":[{"date":"2022-01-01"},{"date":"2022-01-02"}]},{"property":"event_date"}]}`, message: `expected interval endpoint`},
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -197,7 +198,7 @@ func TestTemporalSyntaxAndJSONValidationErrors(t *testing.T) {
 		{name: "json interval not array", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":"2022-01-01/2022-01-02"},{"date":"2022-01-03"}]}`, message: `expected array`},
 		{name: "json interval arity", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":["2022-01-01"]},{"date":"2022-01-03"}]}`, message: `expected exactly 2 interval endpoints`},
 		{name: "json interval endpoint wrong type", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":[1,"2022-01-02"]},{"date":"2022-01-03"}]}`, message: `expected interval endpoint`},
-		{name: "json interval endpoint bad scalar", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":[{"foo":"bar"},"2022-01-02"]},{"date":"2022-01-03"}]}`, message: `expected scalar expression`},
+		{name: "json interval endpoint bad scalar", lang: LanguageJSON, in: `{"op":"t_after","args":[{"interval":[{"foo":"bar"},"2022-01-02"]},{"date":"2022-01-03"}]}`, message: `expected interval endpoint`},
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -264,6 +265,10 @@ func TestTemporalFunctionTypes(t *testing.T) {
 		if _, err := ParseText(input, WithAllowedFunctions(defs...)); err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
+	}
+	jsonFunctionEndpoint := `{"op":"t_after","args":[{"interval":[{"op":"legacy_datetime_fn","args":[]},{"op":"instant_fn","args":[]}]},{"timestamp":"2022-01-02T00:00:00Z"}]}`
+	if _, err := ParseJSON([]byte(jsonFunctionEndpoint), WithAllowedFunctions(defs...)); err != nil {
+		t.Fatalf("ParseJSON interval function endpoints: %v", err)
 	}
 	_, err := ParseText(`T_AFTER(string_fn(),DATE('2022-01-01'))`, WithAllowedFunctions(defs...))
 	assertParseErrorContains(t, err, `does not return temporal`)
