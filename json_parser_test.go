@@ -145,7 +145,7 @@ func TestParseJSONLikeLiteralPatterns(t *testing.T) {
 		`{"op":"like","args":[{"op":"accenti","args":[{"property":"name"}]},{"op":"accenti","args":["é%"]}]}`,
 	}
 	for _, input := range cases {
-		expr, err := ParseJSON([]byte(input))
+		expr, err := ParseJSON([]byte(input), WithAllowedFunctions(StandardTextFunctions()...))
 		if err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
@@ -223,7 +223,7 @@ func TestParseJSONFunctionsAndArrays(t *testing.T) {
 		t.Fatalf("arg[1] = %T, want ArrayLiteral", fn.Args[1])
 	}
 
-	expr, err = ParseJSON([]byte(`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["foo"]}]}`))
+	expr, err = ParseJSON([]byte(`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["foo"]}]}`), WithAllowedFunctions(StandardTextFunctions()...))
 	if err != nil {
 		t.Fatalf("ParseJSON casei comparison: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestParseJSONFunctionRegistry(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"my_func","args":[]}`))
 	assertParseErrorContains(t, err, `function "my_func" is not allowed`)
 
-	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`))
+	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`), WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, `expected character expression`)
 
 	expr, err := ParseJSON([]byte(`{"op":"is_named","args":[{"property":"name"}]}`), WithAllowedFunctions(FunctionDefinition{
@@ -288,7 +288,7 @@ func TestParseJSONDepthLimit(t *testing.T) {
 	_, err := ParseJSON([]byte(`{"op":"not","args":[{"op":"not","args":[true]}]}`), WithMaxDepth(1))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 
-	_, err = ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},{"op":"casei","args":[{"op":"casei","args":["x"]}]}]}`), WithMaxDepth(1))
+	_, err = ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},{"op":"casei","args":[{"op":"casei","args":["x"]}]}]}`), WithMaxDepth(1), WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 }
 
@@ -321,15 +321,17 @@ func TestParseJSONArgumentCounts(t *testing.T) {
 
 func TestParseJSONRejectsInvalidOperandShapes(t *testing.T) {
 	cases := map[string]string{
-		`{"op":"=","args":[{"property":"x"},null]}`:                      "NULL is only allowed",
-		`{"op":"like","args":[{"property":"name"},1]}`:                   "LIKE pattern must be a string",
-		`{"op":"like","args":[1,"x"]}`:                                   "expected character expression",
-		`{"op":"between","args":[{"property":"height"},"a",2]}`:          "expected numeric expression",
-		`{"op":"casei","args":["a","b"]}`:                                "is not a boolean expression",
-		`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`: "expected character expression",
+		`{"op":"=","args":[{"property":"x"},null]}`:             "NULL is only allowed",
+		`{"op":"like","args":[{"property":"name"},1]}`:          "LIKE pattern must be a string",
+		`{"op":"like","args":[1,"x"]}`:                          "expected character expression",
+		`{"op":"between","args":[{"property":"height"},"a",2]}`: "expected numeric expression",
+		`{"op":"casei","args":["a","b"]}`:                       "is not a boolean expression",
 	}
 	for input, want := range cases {
 		_, err := ParseJSON([]byte(input))
 		assertParseErrorContains(t, err, want)
 	}
+
+	_, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`), WithAllowedFunctions(CaseIFunction()))
+	assertParseErrorContains(t, err, "expected character expression")
 }

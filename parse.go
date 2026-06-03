@@ -29,10 +29,8 @@ type ParseOption func(*Parser)
 
 // NewParser builds a reusable parser.
 func NewParser(opts ...ParseOption) *Parser {
-	defaultFunctions := StandardTextFunctions()
 	p := &Parser{
-		supportedFunctions: functionNames(defaultFunctions),
-		cfg:                ParseConfig{MaxDepth: defaultMaxDepth, functions: newFunctionRegistry(defaultFunctions)},
+		cfg: ParseConfig{MaxDepth: defaultMaxDepth, functions: functionRegistryDefaults()},
 	}
 	for _, opt := range opts {
 		if opt != nil {

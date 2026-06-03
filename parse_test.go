@@ -227,11 +227,11 @@ func TestTextAndJSONParity(t *testing.T) {
 	}
 	for _, tt := range pairs {
 		t.Run(tt.name, func(t *testing.T) {
-			textExpr, err := ParseText(tt.text)
+			textExpr, err := ParseText(tt.text, WithAllowedFunctions(StandardTextFunctions()...))
 			if err != nil {
 				t.Fatalf("ParseText: %v", err)
 			}
-			jsonExpr, err := ParseJSON([]byte(tt.json))
+			jsonExpr, err := ParseJSON([]byte(tt.json), WithAllowedFunctions(StandardTextFunctions()...))
 			if err != nil {
 				t.Fatalf("ParseJSON: %v", err)
 			}
