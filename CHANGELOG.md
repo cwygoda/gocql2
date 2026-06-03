@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.8.0 - 2026-06-03
+#### Features
+- add CQL2 SQL compiler - (8fceeac) - Christian Wygoda
+
+- - -
+
 ## v0.7.0 - 2026-06-03
 #### Features
 - merge function parser options - (4aef8a9) - Christian Wygoda
