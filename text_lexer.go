@@ -96,7 +96,7 @@ func (l *lexer) nextToken() (token, error) {
 		return l.quotedIdentifierToken(start)
 	case isNumberStart(l.input[l.byteOffset:], l.canStartSignedNumber()):
 		return l.numberToken(start)
-	case isIdentifierStart(r):
+	case isIdentifierStartRune(r, size):
 		return l.identifierToken(start)
 	case strings.ContainsRune("=<>+-*/%^", r):
 		return l.operatorToken(start)
@@ -145,14 +145,23 @@ func (l *lexer) stringToken(start Location) (token, error) {
 func (l *lexer) quotedIdentifierToken(start Location) (token, error) {
 	l.advance('"', 1)
 	var b strings.Builder
+	first := true
 	for l.byteOffset < len(l.input) {
 		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
 		if r == '"' {
 			l.advance(r, size)
-			if b.Len() == 0 {
+			if first {
 				return token{}, parseError(LanguageText, start, "quoted identifier must not be empty")
 			}
 			return token{kind: tokenQuotedIdentifier, text: b.String(), span: Span{Start: start, End: l.location()}}, nil
+		}
+		if first {
+			if !isIdentifierStartRune(r, size) {
+				return token{}, parseError(LanguageText, l.location(), fmt.Sprintf("invalid quoted identifier start character %q", r))
+			}
+			first = false
+		} else if !isIdentifierPartRune(r, size) {
+			return token{}, parseError(LanguageText, l.location(), fmt.Sprintf("invalid quoted identifier character %q", r))
 		}
 		b.WriteRune(r)
 		l.advance(r, size)
@@ -216,7 +225,7 @@ func (l *lexer) identifierToken(start Location) (token, error) {
 	begin := l.byteOffset
 	for l.byteOffset < len(l.input) {
 		r, size := utf8.DecodeRuneInString(l.input[l.byteOffset:])
-		if !isIdentifierPart(r) {
+		if !isIdentifierPartRune(r, size) {
 			break
 		}
 		l.advance(r, size)
@@ -295,10 +304,59 @@ func isNumberStart(s string, allowSign bool) bool {
 	return false
 }
 
+func isIdentifierStartRune(r rune, size int) bool {
+	return isValidUTF8Rune(r, size) && isIdentifierStart(r)
+}
+
+func isIdentifierPartRune(r rune, size int) bool {
+	return isValidUTF8Rune(r, size) && isIdentifierPart(r)
+}
+
+func isValidUTF8Rune(r rune, size int) bool {
+	return r != utf8.RuneError || size != 1
+}
+
 func isIdentifierStart(r rune) bool {
-	return r == '_' || r == ':' || unicode.IsLetter(r)
+	switch {
+	case r == ':' || r == '_':
+		return true
+	case 'A' <= r && r <= 'Z':
+		return true
+	case 'a' <= r && r <= 'z':
+		return true
+	case '\u00c0' <= r && r <= '\u00d6':
+		return true
+	case '\u00d8' <= r && r <= '\u00f6':
+		return true
+	case '\u00f8' <= r && r <= '\u02ff':
+		return true
+	case '\u0370' <= r && r <= '\u037d':
+		return true
+	case '\u037f' <= r && r <= '\u1ffe':
+		return true
+	case '\u200c' <= r && r <= '\u200d':
+		return true
+	case '\u2070' <= r && r <= '\u218f':
+		return true
+	case '\u2c00' <= r && r <= '\u2fef':
+		return true
+	case '\u3001' <= r && r <= '\ud7ff':
+		return true
+	case '\uf900' <= r && r <= '\ufdcf':
+		return true
+	case '\ufdf0' <= r && r <= '\ufffd':
+		return true
+	case 0x10000 <= r && r <= 0xeffff:
+		return true
+	default:
+		return false
+	}
 }
 
 func isIdentifierPart(r rune) bool {
-	return isIdentifierStart(r) || unicode.IsDigit(r) || r == '.' || r == '\u203f' || r == '\u2040'
+	return isIdentifierStart(r) || isASCIIDigit(r) || r == '.' || '\u0300' <= r && r <= '\u036f' || '\u203f' <= r && r <= '\u2040'
+}
+
+func isASCIIDigit(r rune) bool {
+	return '0' <= r && r <= '9'
 }
