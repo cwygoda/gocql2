@@ -106,11 +106,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 	}
 
 	src := jsonSpan(path)
-	if spatialOp, ok := isSpatialPredicateOp(op.Op); ok {
+	if spatialOp, ok := isJSONSpatialPredicateOp(op.Op); ok {
 		return parseJSONSpatialPredicate(spatialOp, op.Args, path, depth, cfg)
 	}
-	if temporalOp, ok := isTemporalPredicateOp(op.Op); ok {
+	if temporalOp, ok := isJSONTemporalPredicateOp(op.Op); ok {
 		return parseJSONTemporalPredicate(temporalOp, op.Args, path, depth, cfg)
+	}
+	if isNonJSONCasedSpatialOrTemporalPredicateOp(op.Op) {
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("unsupported reserved operation %q", op.Op))
 	}
 	if arrayOp, ok := isJSONArrayPredicateOp(op.Op); ok {
 		return parseJSONArrayPredicate(arrayOp, op.Args, path, depth, cfg)
@@ -214,6 +217,22 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		}
 		return fn, nil
 	}
+}
+
+func isNonJSONCasedSpatialOrTemporalPredicateOp(name string) bool {
+	if _, ok := isJSONSpatialPredicateOp(name); ok {
+		return false
+	}
+	if _, ok := isJSONTemporalPredicateOp(name); ok {
+		return false
+	}
+	if _, ok := isSpatialPredicateOp(name); ok {
+		return true
+	}
+	if _, ok := isTemporalPredicateOp(name); ok {
+		return true
+	}
+	return false
 }
 
 func parseJSONArrayPredicate(op ArrayPredicateOp, rawArgs []json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (*ArrayPredicateExpression, error) {

@@ -95,6 +95,21 @@ func TestParseJSONSpatialPredicates(t *testing.T) {
 	}
 }
 
+func TestParseJSONSpatialOpNamesAreCaseSensitive(t *testing.T) {
+	cases := []string{
+		`{"op":"S_INTERSECTS","args":[{"property":"geom"},{"type":"Point","coordinates":[7,50]}]}`,
+		`{"op":"S_Intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[7,50]}]}`,
+	}
+	parser := NewParser(
+		WithAllowedProperties(PropertyDefinition{Name: "geom", Type: PropertyTypeGeometry}),
+		WithConformance(ConformanceSpatialFunctions),
+	)
+	for _, input := range cases {
+		_, err := parser.ParseJSON([]byte(input))
+		assertParseErrorContains(t, err, "unsupported reserved operation")
+	}
+}
+
 func TestParseJSONGeoJSONValidation(t *testing.T) {
 	cases := map[string]string{
 		`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[90,180]}]}`:                             "latitude must be between -90 and 90",

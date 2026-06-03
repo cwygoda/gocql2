@@ -26,6 +26,24 @@ var temporalPredicateOps = map[string]TemporalPredicateOp{
 	"t_starts":       TemporalOpStarts,
 }
 
+var jsonTemporalPredicateOps = map[string]TemporalPredicateOp{
+	"t_after":        TemporalOpAfter,
+	"t_before":       TemporalOpBefore,
+	"t_contains":     TemporalOpContains,
+	"t_disjoint":     TemporalOpDisjoint,
+	"t_during":       TemporalOpDuring,
+	"t_equals":       TemporalOpEquals,
+	"t_finishedBy":   TemporalOpFinishedBy,
+	"t_finishes":     TemporalOpFinishes,
+	"t_intersects":   TemporalOpIntersects,
+	"t_meets":        TemporalOpMeets,
+	"t_metBy":        TemporalOpMetBy,
+	"t_overlappedBy": TemporalOpOverlappedBy,
+	"t_overlaps":     TemporalOpOverlaps,
+	"t_startedBy":    TemporalOpStartedBy,
+	"t_starts":       TemporalOpStarts,
+}
+
 var (
 	dateLiteralPattern      = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	timestampLiteralPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$`)
@@ -33,6 +51,11 @@ var (
 
 func isTemporalPredicateOp(name string) (TemporalPredicateOp, bool) {
 	op, ok := temporalPredicateOps[strings.ToLower(name)]
+	return op, ok
+}
+
+func isJSONTemporalPredicateOp(name string) (TemporalPredicateOp, bool) {
+	op, ok := jsonTemporalPredicateOps[name]
 	return op, ok
 }
 
