@@ -15,6 +15,8 @@ func FuzzParseTextDoesNotPanic(f *testing.F) {
 		`status IN ('new','done')`,
 		`NOT (a = 1 OR b <> 2)`,
 		`CASEI(name) = casei('alice')`,
+		`S_INTERSECTS(geom,POINT(7.02 49.92))`,
+		`S_WITHIN(geom,BBOX(-180,-90,180,90))`,
 		`A_CONTAINS(tags, ('foo', 'bar'))`,
 		`A_OVERLAPS(tags, (1, TRUE, status = 'new'))`,
 		`T_AFTER(event_time,TIMESTAMP('2022-04-24T07:59:57Z'))`,
@@ -105,6 +107,40 @@ func cqlTextString(value string) string {
 	return "'" + strings.NewReplacer(`\\`, `\\\\`, `'`, `\'`).Replace(value) + "'"
 }
 
+func FuzzSpatialPredicatesDoNotPanic(f *testing.F) {
+	for _, seed := range []struct {
+		op string
+		x  float64
+		y  float64
+	}{
+		{"s_intersects", 7.02, 49.92},
+		{"s_disjoint", -180, -90},
+		{"s_equals", 180, 90},
+		{"s_within", 10, 51},
+	} {
+		f.Add(seed.op, seed.x, seed.y)
+	}
+	f.Fuzz(func(t *testing.T, op string, x, y float64) {
+		op = strings.ToLower(op)
+		if _, ok := spatialPredicateOps[op]; !ok {
+			op = string(SpatialOpIntersects)
+		}
+		if x < -180 || x > 180 || y < -90 || y > 90 {
+			return
+		}
+
+		text := fmt.Sprintf("%s(geom,POINT(%g %g))", strings.ToUpper(op), x, y)
+		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+			t.Fatalf("ParseText(%q): %v", text, err)
+		}
+
+		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"geom"},{"type":"Point","coordinates":[%g,%g]}]}`, op, x, y)
+		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+			t.Fatalf("ParseJSON(%s): %v", input, err)
+		}
+	})
+}
+
 func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 	for _, seed := range []struct {
 		op     string
@@ -150,6 +186,8 @@ func FuzzParseJSONDoesNotPanic(f *testing.F) {
 		`{"op":"and","args":[true,{"op":"not","args":[false]}]}`,
 		`{"op":"in","args":[{"property":"status"},["new","done"]]}`,
 		`{"op":"=","args":[{"op":"casei","args":[{"property":"name"}]},{"op":"casei","args":["alice"]}]}`,
+		`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[7.02,49.92]}]}`,
+		`{"op":"s_within","args":[{"property":"geom"},{"bbox":[-180,-90,180,90]}]}`,
 		`{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`,
 		`{"op":"a_overlaps","args":[{"property":"tags"},[1,true,{"op":"=","args":[{"property":"status"},"new"]}]]}`,
 		`{"op":"t_after","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`,

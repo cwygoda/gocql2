@@ -5,7 +5,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
   The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-30
+  @test-30
   Scenario: A.9.1. Conformance Test 30 /conf/spatial-functions/s_intersects
     # ATS section: A.9.1
     # ATS id: /conf/spatial-functions/s_intersects
@@ -26,7 +26,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     And assert that the two result sets of the first two filter expressions for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-31
+  @test-31
   Scenario: A.9.2. Conformance Test 31 /conf/spatial-functions/s_disjoint
     # ATS section: A.9.2
     # ATS id: /conf/spatial-functions/s_disjoint
@@ -47,7 +47,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     And assert that the results sets of the third and fourth filter expressions for each queryable do not have an item in common with the corresponding S_INTERSECTS expression;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-32
+  @test-32
   Scenario: A.9.3. Conformance Test 32 /conf/spatial-functions/s_equals
     # ATS section: A.9.3
     # ATS id: /conf/spatial-functions/s_equals
@@ -64,7 +64,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     And assert that the two result sets of the first two filter expressions for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-33
+  @test-33
   Scenario: A.9.4. Conformance Test 33 /conf/spatial-functions/s_touches
     # ATS section: A.9.4
     # ATS id: /conf/spatial-functions/s_touches
@@ -80,7 +80,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-34
+  @test-34
   Scenario: A.9.5. Conformance Test 34 /conf/spatial-functions/s_crosses
     # ATS section: A.9.5
     # ATS id: /conf/spatial-functions/s_crosses
@@ -96,7 +96,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-35
+  @test-35
   Scenario: A.9.6. Conformance Test 35 /conf/spatial-functions/s_within
     # ATS section: A.9.6
     # ATS id: /conf/spatial-functions/s_within
@@ -114,7 +114,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     And assert that the two result sets of the first two filter expressions for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-36
+  @test-36
   Scenario: A.9.7. Conformance Test 36 /conf/spatial-functions/s_contains
     # ATS section: A.9.7
     # ATS id: /conf/spatial-functions/s_contains
@@ -133,7 +133,7 @@ Feature: A.9 Spatial Functions abstract conformance tests
     And assert that the results sets for each queryable do not have an item in common with the corresponding S_WITHIN expression;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-37
+  @test-37
   Scenario: A.9.8. Conformance Test 37 /conf/spatial-functions/s_overlaps
     # ATS section: A.9.8
     # ATS id: /conf/spatial-functions/s_overlaps

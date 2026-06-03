@@ -86,6 +86,9 @@ func (p *textParser) parseNot(depth int) (Expression, error) {
 
 func (p *textParser) parsePrimaryExpression(depth int) (Expression, error) {
 	if p.peek().kind == tokenKeyword {
+		if op, ok := isSpatialPredicateOp(p.peek().text); ok {
+			return p.parseSpatialPredicate(op, depth+1)
+		}
 		if op, ok := isTemporalPredicateOp(p.peek().text); ok {
 			return p.parseTemporalPredicate(op, depth+1)
 		}
@@ -675,6 +678,9 @@ func (p *textParser) parseFunctionArg(depth int) (Node, error) {
 	p.pos = start
 	if p.at(tokenKeyword, "INTERVAL") {
 		return p.parseTemporalInstance(depth + 1)
+	}
+	if isGeometryKeyword(p.peek()) {
+		return p.parseTextGeometryLiteral(depth + 1)
 	}
 	if scalar, err := p.parseScalar(depth + 1); err == nil {
 		return scalar, nil
