@@ -422,6 +422,11 @@ func parseJSONIsNullOperand(raw json.RawMessage, path JSONPath, depth int, cfg P
 	if temporal, err := parseJSONTemporalInstance(raw, path, depth, cfg); err == nil {
 		return temporal, nil
 	}
+	if geom, err := parseJSONGeometryLiteral(raw, path, depth, cfg); err == nil {
+		return geom, nil
+	} else if hasJSONGeometryLiteralKey(raw, path) {
+		return nil, err
+	}
 	return nil, jsonPathError(path, "expected IS NULL operand")
 }
 

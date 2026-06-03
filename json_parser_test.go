@@ -174,6 +174,7 @@ func TestParseJSONIsNullOperands(t *testing.T) {
 		`{"op":"isNull","args":[true]}`,
 		`{"op":"isNull","args":[{"op":"=","args":[{"property":"a"},1]}]}`,
 		`{"op":"isNull","args":[{"op":"+","args":[{"property":"height"},1]}]}`,
+		`{"op":"isNull","args":[{"type":"Point","coordinates":[1,2]}]}`,
 	}
 	for _, input := range cases {
 		expr, err := ParseJSON([]byte(input))

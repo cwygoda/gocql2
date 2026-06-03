@@ -237,6 +237,7 @@ func TestParseTextIsNullOperands(t *testing.T) {
 		`TRUE IS NOT NULL`,
 		`(a = 1) IS NULL`,
 		`(height + 1) IS NOT NULL`,
+		`POINT(1 2) IS NULL`,
 	}
 	for _, input := range cases {
 		expr, err := ParseText(input)
