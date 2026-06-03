@@ -287,10 +287,10 @@ func parseJSONTemporalInstance(raw json.RawMessage, path JSONPath, depth int, cf
 		return nil, err
 	}
 	if _, ok := obj["date"]; ok {
-		return parseJSONTemporalInstant(raw, path, cfg)
+		return parseJSONTemporalInstant(raw, path)
 	}
 	if _, ok := obj["timestamp"]; ok {
-		return parseJSONTemporalInstant(raw, path, cfg)
+		return parseJSONTemporalInstant(raw, path)
 	}
 	if _, ok := obj["interval"]; ok {
 		return parseJSONTemporalInterval(raw, path, depth+1, cfg)
@@ -298,7 +298,7 @@ func parseJSONTemporalInstance(raw json.RawMessage, path JSONPath, depth int, cf
 	return nil, jsonPathError(path, "expected temporal instance")
 }
 
-func parseJSONTemporalInstant(raw json.RawMessage, path JSONPath, cfg ParseConfig) (*TemporalInstant, error) {
+func parseJSONTemporalInstant(raw json.RawMessage, path JSONPath) (*TemporalInstant, error) {
 	var obj rawObject
 	if err := unmarshalAt(raw, path, &obj); err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func parseJSONTemporalInstant(raw json.RawMessage, path JSONPath, cfg ParseConfi
 		if err := unmarshalAt(rawTimestamp, path.Key("timestamp"), &value); err != nil {
 			return nil, jsonPathError(path.Key("timestamp"), "expected timestamp string")
 		}
-		if err := validateTimestampLiteral(value, cfg.StrictTimestampUTC); err != nil {
+		if err := validateTimestampLiteral(value); err != nil {
 			return nil, jsonPathError(path.Key("timestamp"), err.Error())
 		}
 		return &TemporalInstant{Kind: TemporalInstantTimestamp, Value: value, Src: jsonSpan(path)}, nil
@@ -377,7 +377,7 @@ func parseJSONTemporalIntervalEndpoint(raw json.RawMessage, path JSONPath, depth
 		if value == ".." {
 			return &TemporalUnbounded{Src: lit.Src}, nil
 		}
-		kind, err := temporalInstantKindFromString(value, cfg.StrictTimestampUTC)
+		kind, err := temporalInstantKindFromString(value)
 		if err != nil {
 			return nil, jsonPathError(path, err.Error())
 		}
@@ -470,10 +470,10 @@ func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseCon
 		return propertyRef(name, jsonSpan(path), cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("property")})
 	}
 	if _, ok := obj["date"]; ok {
-		return parseJSONTemporalInstant(raw, path, cfg)
+		return parseJSONTemporalInstant(raw, path)
 	}
 	if _, ok := obj["timestamp"]; ok {
-		return parseJSONTemporalInstant(raw, path, cfg)
+		return parseJSONTemporalInstant(raw, path)
 	}
 
 	op, err := parseJSONOpObject(raw, path)
