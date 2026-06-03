@@ -223,6 +223,8 @@ func nodeFunctionTypes(node Node) []FunctionType {
 		return cloneFunctionTypes(value.ReturnTypes)
 	case *ArrayLiteral:
 		return []FunctionType{FunctionTypeArray}
+	case *GeometryLiteral:
+		return []FunctionType{FunctionTypeGeometry}
 	case Expression:
 		return []FunctionType{FunctionTypeBoolean}
 	default:

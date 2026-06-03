@@ -255,6 +255,68 @@ func (*ArrayPredicateExpression) expressionNode() {}
 
 func (e *ArrayPredicateExpression) Span() Span { return e.Src }
 
+// SpatialPredicateOp is a standardized spatial comparison operation.
+type SpatialPredicateOp string
+
+// Supported spatial predicate operators.
+const (
+	SpatialOpContains   SpatialPredicateOp = "s_contains"
+	SpatialOpCrosses    SpatialPredicateOp = "s_crosses"
+	SpatialOpDisjoint   SpatialPredicateOp = "s_disjoint"
+	SpatialOpEquals     SpatialPredicateOp = "s_equals"
+	SpatialOpIntersects SpatialPredicateOp = "s_intersects"
+	SpatialOpOverlaps   SpatialPredicateOp = "s_overlaps"
+	SpatialOpTouches    SpatialPredicateOp = "s_touches"
+	SpatialOpWithin     SpatialPredicateOp = "s_within"
+)
+
+// SpatialPredicateExpression compares two geometry-valued operands.
+type SpatialPredicateExpression struct {
+	Op    SpatialPredicateOp
+	Left  Node
+	Right Node
+	Src   Span
+}
+
+func (*SpatialPredicateExpression) expressionNode() {}
+
+func (e *SpatialPredicateExpression) Span() Span { return e.Src }
+
+// GeometryType identifies a CQL2 geometry literal type.
+type GeometryType string
+
+// Supported geometry literal types.
+const (
+	GeometryTypePoint              GeometryType = "Point"
+	GeometryTypeMultiPoint         GeometryType = "MultiPoint"
+	GeometryTypeLineString         GeometryType = "LineString"
+	GeometryTypeMultiLineString    GeometryType = "MultiLineString"
+	GeometryTypePolygon            GeometryType = "Polygon"
+	GeometryTypeMultiPolygon       GeometryType = "MultiPolygon"
+	GeometryTypeGeometryCollection GeometryType = "GeometryCollection"
+	GeometryTypeBBox               GeometryType = "BBox"
+)
+
+// GeometryLiteral represents a parsed CQL2 geometry literal. Coordinates uses
+// GeoJSON coordinate nesting: point [2]float64, line []Coordinate, polygon
+// [][]Coordinate, and so on. BBox stores either [minx,miny,maxx,maxy] or
+// [minx,miny,minz,maxx,maxy,maxz].
+type GeometryLiteral struct {
+	Type        GeometryType
+	Coordinates any
+	Geometries  []*GeometryLiteral
+	BBox        []float64
+	Src         Span
+}
+
+func (g *GeometryLiteral) Span() Span { return g.Src }
+
+// Coordinate is a longitude/latitude pair in the default CQL2 CRS.
+type Coordinate struct {
+	X float64
+	Y float64
+}
+
 // PropertyRef references a feature property.
 type PropertyRef struct {
 	Name string

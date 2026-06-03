@@ -106,6 +106,9 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 	}
 
 	src := jsonSpan(path)
+	if spatialOp, ok := isSpatialPredicateOp(op.Op); ok {
+		return parseJSONSpatialPredicate(spatialOp, op.Args, path, depth, cfg)
+	}
 	if temporalOp, ok := isTemporalPredicateOp(op.Op); ok {
 		return parseJSONTemporalPredicate(temporalOp, op.Args, path, depth, cfg)
 	}
@@ -658,6 +661,11 @@ func parseJSONNode(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfi
 	if temporal, err := parseJSONTemporalInstance(raw, path, depth, cfg); err == nil {
 		return temporal, nil
 	} else if hasJSONTemporalInstanceKey(raw, path) {
+		return nil, err
+	}
+	if geom, err := parseJSONGeometryLiteral(raw, path, depth, cfg); err == nil {
+		return geom, nil
+	} else if hasJSONGeometryLiteralKey(raw, path) {
 		return nil, err
 	}
 	if array, err := parseJSONArrayLiteral(raw, path, depth, cfg); err == nil {
