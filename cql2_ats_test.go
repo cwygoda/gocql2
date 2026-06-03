@@ -108,8 +108,6 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^assert successful execution of the evaluation for the first (two|four) filter expressions;$`, s.assertSpatialSuccessFirst)
 	ctx.Step(`^assert successful execution of the evaluation for all filter expressions except the first;$`, s.assertSpatialSuccessExceptFirst)
 	ctx.Step(`^assert unsuccessful execution of the evaluation for the (first|third|fifth) filter expressions \(invalid coordinate\);$`, s.assertSpatialFailureOrdinal)
-	ctx.Step(`^assert that the two result sets of the first two filter expressions for each queryable are (?:identical|empty);$`, s.assertSpatialResultSetStatement)
-	ctx.Step(`^assert that the results sets (?:of the third and fourth filter expressions for each queryable|for each queryable) do not have an item in common with the corresponding S_(?:INTERSECTS|WITHIN) expression;$`, s.assertSpatialDisjointResultSetStatement)
 
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least one queryable of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least two queryables of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
@@ -355,20 +353,6 @@ func (s *cql2ATSSuite) assertSpatialFailureOrdinal(ordinal string) error {
 	}
 	if s.spatialParseErrs[index] == nil {
 		return fmt.Errorf("spatial predicate %d parsed successfully, want invalid coordinate failure: %s", index+1, s.spatialFilters[index])
-	}
-	return nil
-}
-
-func (s *cql2ATSSuite) assertSpatialResultSetStatement() error {
-	if s.isSpatialATS() {
-		s.executedByStep = true
-	}
-	return nil
-}
-
-func (s *cql2ATSSuite) assertSpatialDisjointResultSetStatement() error {
-	if s.isSpatialATS() {
-		s.executedByStep = true
 	}
 	return nil
 }
