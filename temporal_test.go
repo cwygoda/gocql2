@@ -30,7 +30,7 @@ func TestTemporalPredicatesTextAndJSON(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			textExpr, err := ParseText(tt.text)
+			textExpr, err := ParseText(tt.text, WithConformance(ConformanceTemporalFunctions))
 			if err != nil {
 				t.Fatalf("ParseText: %v", err)
 			}
@@ -42,7 +42,7 @@ func TestTemporalPredicatesTextAndJSON(t *testing.T) {
 				t.Fatalf("text op = %q, want %q", textTemporal.Op, tt.op)
 			}
 
-			jsonExpr, err := ParseJSON([]byte(tt.json))
+			jsonExpr, err := ParseJSON([]byte(tt.json), WithConformance(ConformanceTemporalFunctions))
 			if err != nil {
 				t.Fatalf("ParseJSON: %v", err)
 			}
@@ -91,6 +91,7 @@ func TestTemporalLiteralsInScalarAndValueContexts(t *testing.T) {
 		{name: "json interval is null", lang: LanguageJSON, in: `{"op":"isNull","args":[{"interval":["2022-01-01","2022-01-31"]}]}`},
 	}
 	parser := NewParser(
+		WithConformance(ConformanceArrayFunctions),
 		WithAllowedFunctions(FunctionDefinition{
 			Name:    "has_interval",
 			Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeInterval}}},
@@ -157,7 +158,7 @@ func TestTemporalOperandValidation(t *testing.T) {
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.in), tt.lang, typed)
+			_, err := Parse([]byte(tt.in), tt.lang, WithConformance(ConformanceTemporalFunctions), typed)
 			assertParseErrorContains(t, err, tt.message)
 		})
 	}
@@ -180,7 +181,7 @@ func TestTemporalLiteralValidation(t *testing.T) {
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.in), tt.lang)
+			_, err := Parse([]byte(tt.in), tt.lang, WithConformance(ConformanceTemporalFunctions))
 			assertParseErrorContains(t, err, tt.message)
 		})
 	}
@@ -218,14 +219,14 @@ func TestTemporalSyntaxAndJSONValidationErrors(t *testing.T) {
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.in), tt.lang)
+			_, err := Parse([]byte(tt.in), tt.lang, WithConformance(ConformanceTemporalFunctions))
 			assertParseErrorContains(t, err, tt.message)
 		})
 	}
 }
 
 func TestTemporalUnboundedIntervalsAndASTSpans(t *testing.T) {
-	textExpr, err := ParseText(`T_AFTER(INTERVAL('..','2022-01-02'),INTERVAL('2022-01-03','..'))`)
+	textExpr, err := ParseText(`T_AFTER(INTERVAL('..','2022-01-02'),INTERVAL('2022-01-03','..'))`, WithConformance(ConformanceTemporalFunctions))
 	if err != nil {
 		t.Fatalf("ParseText: %v", err)
 	}
@@ -250,7 +251,7 @@ func TestTemporalUnboundedIntervalsAndASTSpans(t *testing.T) {
 		t.Fatalf("unbounded span = %#v, want non-empty text span", left.Start.Span())
 	}
 
-	jsonExpr, err := ParseJSON([]byte(`{"op":"t_after","args":[{"interval":["..","2022-01-02"]},{"interval":["2022-01-03",".."]}]}`))
+	jsonExpr, err := ParseJSON([]byte(`{"op":"t_after","args":[{"interval":["..","2022-01-02"]},{"interval":["2022-01-03",".."]}]}`), WithConformance(ConformanceTemporalFunctions))
 	if err != nil {
 		t.Fatalf("ParseJSON: %v", err)
 	}
@@ -278,19 +279,19 @@ func TestTemporalFunctionTypes(t *testing.T) {
 		`T_AFTER(INTERVAL(legacy_datetime_fn(),instant_fn()),interval_fn())`,
 	}
 	for _, input := range okCases {
-		if _, err := ParseText(input, WithAllowedFunctions(defs...)); err != nil {
+		if _, err := ParseText(input, WithConformance(ConformanceTemporalFunctions), WithAllowedFunctions(defs...)); err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
 	}
 	jsonFunctionEndpoint := `{"op":"t_after","args":[{"interval":[{"op":"legacy_datetime_fn","args":[]},{"op":"instant_fn","args":[]}]},{"timestamp":"2022-01-02T00:00:00Z"}]}`
-	if _, err := ParseJSON([]byte(jsonFunctionEndpoint), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := ParseJSON([]byte(jsonFunctionEndpoint), WithConformance(ConformanceTemporalFunctions), WithAllowedFunctions(defs...)); err != nil {
 		t.Fatalf("ParseJSON interval function endpoints: %v", err)
 	}
-	_, err := ParseText(`T_AFTER(string_fn(),DATE('2022-01-01'))`, WithAllowedFunctions(defs...))
+	_, err := ParseText(`T_AFTER(string_fn(),DATE('2022-01-01'))`, WithConformance(ConformanceTemporalFunctions), WithAllowedFunctions(defs...))
 	assertParseErrorContains(t, err, `does not return temporal`)
-	_, err = ParseText(`T_AFTER(INTERVAL(interval_fn(),instant_fn()),DATE('2022-01-01'))`, WithAllowedFunctions(defs...))
+	_, err = ParseText(`T_AFTER(INTERVAL(interval_fn(),instant_fn()),DATE('2022-01-01'))`, WithConformance(ConformanceTemporalFunctions), WithAllowedFunctions(defs...))
 	assertParseErrorContains(t, err, `returns interval and cannot be used as an interval endpoint`)
-	_, err = ParseText(`T_AFTER(INTERVAL(string_fn(),'2022-01-01'),DATE('2022-01-02'))`, WithAllowedFunctions(defs...))
+	_, err = ParseText(`T_AFTER(INTERVAL(string_fn(),'2022-01-01'),DATE('2022-01-02'))`, WithConformance(ConformanceTemporalFunctions), WithAllowedFunctions(defs...))
 	assertParseErrorContains(t, err, `does not return instant`)
 
 	acceptInterval := FunctionDefinition{

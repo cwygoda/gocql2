@@ -9,8 +9,9 @@ const defaultMaxDepth = 128
 
 // ParseConfig configures parser behavior.
 type ParseConfig struct {
-	properties propertyRegistry
-	functions  functionRegistry
+	properties  propertyRegistry
+	functions   functionRegistry
+	conformance conformanceCapabilities
 
 	MaxDepth int
 }

@@ -77,7 +77,7 @@ func TestAllowedPropertyRegistry(t *testing.T) {
 	}
 	for _, tt := range okCases {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Parse([]byte(tt.in), tt.lang, typedRegistry); err != nil {
+			if _, err := Parse([]byte(tt.in), tt.lang, WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic), typedRegistry); err != nil {
 				t.Fatalf("Parse: %v", err)
 			}
 		})
@@ -102,12 +102,12 @@ func TestAllowedPropertyRegistry(t *testing.T) {
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.in), tt.lang, typedRegistry)
+			_, err := Parse([]byte(tt.in), tt.lang, WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic), typedRegistry)
 			assertParseErrorContains(t, err, tt.message)
 		})
 	}
 
-	if _, err := ParseText(`name BETWEEN 1 AND 2`, WithSupportedProperties("name")); err != nil {
+	if _, err := ParseText(`name BETWEEN 1 AND 2`, WithConformance(ConformanceAdvancedComparisonOperators), WithSupportedProperties("name")); err != nil {
 		t.Fatalf("untyped supported property should remain usable in numeric context: %v", err)
 	}
 	_, err := ParseText(`other = 1`, WithSupportedProperties("name"))
@@ -227,11 +227,11 @@ func TestTextAndJSONParity(t *testing.T) {
 	}
 	for _, tt := range pairs {
 		t.Run(tt.name, func(t *testing.T) {
-			textExpr, err := ParseText(tt.text, WithAllowedFunctions(StandardTextFunctions()...))
+			textExpr, err := ParseText(tt.text, WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic, ConformanceArrayFunctions), WithAllowedFunctions(StandardTextFunctions()...))
 			if err != nil {
 				t.Fatalf("ParseText: %v", err)
 			}
-			jsonExpr, err := ParseJSON([]byte(tt.json), WithAllowedFunctions(StandardTextFunctions()...))
+			jsonExpr, err := ParseJSON([]byte(tt.json), WithConformance(ConformanceAdvancedComparisonOperators, ConformancePropertyProperty, ConformanceArithmetic, ConformanceArrayFunctions), WithAllowedFunctions(StandardTextFunctions()...))
 			if err != nil {
 				t.Fatalf("ParseJSON: %v", err)
 			}

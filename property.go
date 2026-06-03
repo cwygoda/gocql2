@@ -136,6 +136,82 @@ func validateScalarExpression(scalar ScalarExpression, source Language) error {
 	return parseError(source, prop.Span().Start, fmt.Sprintf("property %q of type %q cannot be used as a scalar expression", prop.Name, prop.Type))
 }
 
+func validatePropertyPropertyConformance(cfg ParseConfig, source Language, operands ...ScalarExpression) error {
+	if cfg.conformance.propertyProperty || len(operands) == 0 {
+		return nil
+	}
+	if !scalarExpressionReferencesProperty(operands[0]) {
+		return parseError(source, operands[0].Span().Start, "comparison requires a property-valued left operand unless property-property conformance is enabled")
+	}
+	for _, operand := range operands[1:] {
+		if scalarExpressionReferencesProperty(operand) {
+			return parseError(source, operand.Span().Start, "property-valued comparison operands require property-property conformance")
+		}
+	}
+	return nil
+}
+
+func scalarExpressionReferencesProperty(scalar ScalarExpression) bool {
+	switch value := scalar.(type) {
+	case *PropertyRef:
+		return true
+	case *FunctionCall:
+		for _, arg := range value.Args {
+			if nodeReferencesProperty(arg) {
+				return true
+			}
+		}
+	case *ArithmeticExpression:
+		return scalarExpressionReferencesProperty(value.Left) || scalarExpressionReferencesProperty(value.Right)
+	}
+	return false
+}
+
+func nodeReferencesProperty(node Node) bool {
+	switch value := node.(type) {
+	case *ArrayLiteral:
+		for _, item := range value.Values {
+			if nodeReferencesProperty(item) {
+				return true
+			}
+		}
+	case ScalarExpression:
+		return scalarExpressionReferencesProperty(value)
+	case *LogicalExpression:
+		for _, arg := range value.Args {
+			if nodeReferencesProperty(arg) {
+				return true
+			}
+		}
+	case *ComparisonExpression:
+		return scalarExpressionReferencesProperty(value.Left) || scalarExpressionReferencesProperty(value.Right)
+	case *LikeExpression:
+		return scalarExpressionReferencesProperty(value.Expr) || scalarExpressionReferencesProperty(value.Pattern)
+	case *BetweenExpression:
+		return scalarExpressionReferencesProperty(value.Expr) || scalarExpressionReferencesProperty(value.Lower) || scalarExpressionReferencesProperty(value.Upper)
+	case *InExpression:
+		if scalarExpressionReferencesProperty(value.Expr) {
+			return true
+		}
+		for _, item := range value.Values {
+			if scalarExpressionReferencesProperty(item) {
+				return true
+			}
+		}
+	case *IsNullExpression:
+		return nodeReferencesProperty(value.Expr)
+	case *TemporalInterval:
+		return nodeReferencesProperty(value.Start) || nodeReferencesProperty(value.End)
+	case *SpatialPredicateExpression:
+		return nodeReferencesProperty(value.Left) || nodeReferencesProperty(value.Right)
+	case *TemporalPredicateExpression:
+		return nodeReferencesProperty(value.Left) || nodeReferencesProperty(value.Right)
+	case *ArrayPredicateExpression:
+		return nodeReferencesProperty(value.Left) || nodeReferencesProperty(value.Right)
+	}
+	return false
+}
+
 func validateComparisonOperands(op ComparisonOp, left, right ScalarExpression, source Language) error {
 	if err := validateScalarExpression(left, source); err != nil {
 		return err

@@ -107,15 +107,24 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 
 	src := jsonSpan(path)
 	if spatialOp, ok := isJSONSpatialPredicateOp(op.Op); ok {
+		if !cfg.conformance.allowsSpatialPredicate(spatialOp) {
+			return nil, jsonPathError(path.Key("op"), "spatial predicate requires spatial conformance")
+		}
 		return parseJSONSpatialPredicate(spatialOp, op.Args, path, depth, cfg)
 	}
 	if temporalOp, ok := isJSONTemporalPredicateOp(op.Op); ok {
+		if !cfg.conformance.allowsTemporalPredicate(temporalOp) {
+			return nil, jsonPathError(path.Key("op"), "temporal predicate requires temporal-functions conformance")
+		}
 		return parseJSONTemporalPredicate(temporalOp, op.Args, path, depth, cfg)
 	}
 	if isNonJSONCasedSpatialOrTemporalPredicateOp(op.Op) {
 		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("unsupported reserved operation %q", op.Op))
 	}
 	if arrayOp, ok := isJSONArrayPredicateOp(op.Op); ok {
+		if !cfg.conformance.allowsArrayPredicate(arrayOp) {
+			return nil, jsonPathError(path.Key("op"), "array predicate requires array-functions conformance")
+		}
 		return parseJSONArrayPredicate(arrayOp, op.Args, path, depth, cfg)
 	}
 	switch op.Op {
@@ -150,8 +159,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if err := validateComparisonOperands(cmpOp, args[0], args[1], LanguageJSON); err != nil {
 			return nil, err
 		}
+		if err := validatePropertyPropertyConformance(cfg, LanguageJSON, args[0], args[1]); err != nil {
+			return nil, err
+		}
 		return &ComparisonExpression{Op: cmpOp, Left: args[0], Right: args[1], Src: src}, nil
 	case "like":
+		if !cfg.conformance.advancedComparisonOperators {
+			return nil, jsonPathError(path.Key("op"), "LIKE requires advanced-comparison-operators conformance")
+		}
 		if len(op.Args) != 2 {
 			return nil, jsonPathError(path.Key("args"), "expected exactly 2 arguments")
 		}
@@ -163,8 +178,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 		if err != nil {
 			return nil, err
 		}
+		if err := validatePropertyPropertyConformance(cfg, LanguageJSON, expr, pattern); err != nil {
+			return nil, err
+		}
 		return &LikeExpression{Expr: expr, Pattern: pattern, Src: src}, nil
 	case "between":
+		if !cfg.conformance.advancedComparisonOperators {
+			return nil, jsonPathError(path.Key("op"), "BETWEEN requires advanced-comparison-operators conformance")
+		}
 		if len(op.Args) != 3 {
 			return nil, jsonPathError(path.Key("args"), "expected exactly 3 arguments")
 		}
@@ -176,8 +197,14 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 			}
 			args = append(args, arg)
 		}
+		if err := validatePropertyPropertyConformance(cfg, LanguageJSON, args...); err != nil {
+			return nil, err
+		}
 		return &BetweenExpression{Expr: args[0], Lower: args[1], Upper: args[2], Src: src}, nil
 	case "in":
+		if !cfg.conformance.advancedComparisonOperators {
+			return nil, jsonPathError(path.Key("op"), "IN requires advanced-comparison-operators conformance")
+		}
 		if len(op.Args) != 2 {
 			return nil, jsonPathError(path.Key("args"), "expected exactly two arguments")
 		}
@@ -190,6 +217,9 @@ func parseJSONExpression(raw json.RawMessage, path JSONPath, depth int, cfg Pars
 			return nil, err
 		}
 		if err := validateInOperands(expr, values, LanguageJSON); err != nil {
+			return nil, err
+		}
+		if err := validatePropertyPropertyConformance(cfg, LanguageJSON, append([]ScalarExpression{expr}, values...)...); err != nil {
 			return nil, err
 		}
 		return &InExpression{Expr: expr, Values: values, Src: src}, nil
@@ -506,6 +536,9 @@ func parseJSONScalar(raw json.RawMessage, path JSONPath, depth int, cfg ParseCon
 		return parseJSONCharacterFunction(op.Op, op.Args, path, depth, cfg)
 	}
 	if isJSONArithmeticOp(op.Op) {
+		if !cfg.conformance.arithmetic {
+			return nil, jsonPathError(path.Key("op"), "arithmetic requires arithmetic conformance")
+		}
 		return parseJSONArithmeticExpression(op.Op, op.Args, path, depth, cfg)
 	}
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
@@ -632,6 +665,9 @@ func parseJSONNumericExpression(raw json.RawMessage, path JSONPath, depth int, c
 		return nil, jsonPathError(path, "expected numeric expression")
 	}
 	if isJSONArithmeticOp(op.Op) {
+		if !cfg.conformance.arithmetic {
+			return nil, jsonPathError(path.Key("op"), "arithmetic requires arithmetic conformance")
+		}
 		return parseJSONArithmeticExpression(op.Op, op.Args, path, depth+1, cfg)
 	}
 	if _, reserved := reservedJSONOps[op.Op]; reserved {
