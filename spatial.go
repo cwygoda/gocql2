@@ -23,6 +23,11 @@ func isSpatialPredicateOp(name string) (SpatialPredicateOp, bool) {
 	return op, ok
 }
 
+func isJSONSpatialPredicateOp(name string) (SpatialPredicateOp, bool) {
+	op, ok := spatialPredicateOps[name]
+	return op, ok
+}
+
 func (p *textParser) parseSpatialPredicate(op SpatialPredicateOp, depth int) (*SpatialPredicateExpression, error) {
 	nameTok := p.advance()
 	if _, err := p.expect(tokenLParen, "opening parenthesis"); err != nil {

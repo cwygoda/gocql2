@@ -60,6 +60,21 @@ func TestTemporalPredicatesTextAndJSON(t *testing.T) {
 	}
 }
 
+func TestParseJSONTemporalOpNamesAreCaseSensitive(t *testing.T) {
+	cases := []string{
+		`{"op":"T_AFTER","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`,
+		`{"op":"t_finishedby","args":[{"interval":["2021-01-01","2021-12-31"]},{"interval":["2021-01-01","2021-12-31"]}]}`,
+		`{"op":"t_metby","args":[{"interval":["2021-01-01","2021-12-31"]},{"interval":["2021-01-01","2021-12-31"]}]}`,
+		`{"op":"t_overlappedby","args":[{"interval":["2021-01-01","2021-12-31"]},{"interval":["2021-01-01","2021-12-31"]}]}`,
+		`{"op":"t_startedby","args":[{"interval":["2021-01-01","2021-12-31"]},{"interval":["2021-01-01","2021-12-31"]}]}`,
+	}
+	parser := NewParser(WithConformance(ConformanceTemporalFunctions))
+	for _, input := range cases {
+		_, err := parser.ParseJSON([]byte(input))
+		assertParseErrorContains(t, err, "unsupported reserved operation")
+	}
+}
+
 func TestTemporalLiteralsInScalarAndValueContexts(t *testing.T) {
 	okCases := []struct {
 		name string
