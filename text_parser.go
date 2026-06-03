@@ -677,6 +677,9 @@ func (p *textParser) parseArrayElement(depth int) (Node, error) {
 	if p.at(tokenKeyword, "INTERVAL") {
 		return p.parseTemporalInstance(depth + 1)
 	}
+	if isGeometryKeyword(p.peek()) {
+		return p.parseTextGeometryLiteral(depth + 1)
+	}
 	return p.parseScalar(depth + 1)
 }
 

@@ -127,6 +127,7 @@ func TestParseTextArrayPredicates(t *testing.T) {
 		op    ArrayPredicateOp
 	}{
 		{input: `A_CONTAINS(tags, ('foo', 'bar'))`, op: ArrayOpContains},
+		{input: `A_CONTAINS(tags, (POINT(1 2)))`, op: ArrayOpContains},
 		{input: `A_CONTAINEDBY((), tags)`, op: ArrayOpContainedBy},
 		{input: `A_EQUALS(tags, (1, 2 + count, TRUE))`, op: ArrayOpEquals},
 		{input: `A_OVERLAPS(get_tags(), (('nested'), status = 'new'))`, op: ArrayOpOverlaps},
