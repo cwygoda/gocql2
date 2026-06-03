@@ -28,6 +28,8 @@ const (
 	PropertyTypeGeometry           PropertyType = "geometry"
 	PropertyTypeGeometryCollection PropertyType = "geometrycollection"
 	PropertyTypeArray              PropertyType = "array"
+
+	propertyTypeUnsupported PropertyType = "\x00unsupported"
 )
 
 // PropertyDefinition describes one allowed queryable property.
@@ -229,11 +231,14 @@ func scalarExpressionType(scalar ScalarExpression) PropertyType {
 	case *FunctionCall:
 		return functionReturnPropertyType(value)
 	default:
-		return PropertyTypeAny
+		return propertyTypeUnsupported
 	}
 }
 
 func areComparableTypes(left, right PropertyType) bool {
+	if isUnsupportedPropertyType(left) || isUnsupportedPropertyType(right) {
+		return false
+	}
 	if left == PropertyTypeAny || right == PropertyTypeAny {
 		return true
 	}
@@ -247,6 +252,9 @@ func areComparableTypes(left, right PropertyType) bool {
 }
 
 func isOrderedComparisonType(left, right PropertyType) bool {
+	if isUnsupportedPropertyType(left) || isUnsupportedPropertyType(right) {
+		return false
+	}
 	if left == PropertyTypeAny || right == PropertyTypeAny {
 		return true
 	}
@@ -276,9 +284,16 @@ func isInstantPropertyType(typ PropertyType) bool {
 	return typ == PropertyTypeDate || typ == PropertyTypeTimestamp
 }
 
+func isUnsupportedPropertyType(typ PropertyType) bool {
+	return typ == propertyTypeUnsupported || typ != PropertyTypeAny && !isKnownPropertyType(typ)
+}
+
 func describePropertyType(typ PropertyType) string {
 	if typ == PropertyTypeAny {
 		return "untyped"
+	}
+	if isUnsupportedPropertyType(typ) {
+		return "unsupported"
 	}
 	return string(typ)
 }

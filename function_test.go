@@ -2,6 +2,12 @@ package gocql2
 
 import "testing"
 
+type unknownScalarExpression struct{}
+
+func (*unknownScalarExpression) scalarNode() {}
+
+func (*unknownScalarExpression) Span() Span { return Span{} }
+
 func TestFunctionRegistryValidationEdges(t *testing.T) {
 	_, err := ParseText(`casei() = 'x'`, WithAllowedFunctions(CaseIFunction()))
 	assertParseErrorContains(t, err, `function "casei" expects exactly 1 arguments`)
@@ -70,12 +76,14 @@ func TestFunctionTypeHelpers(t *testing.T) {
 		PropertyTypeGeometry,
 		PropertyTypeGeometryCollection,
 		PropertyTypeArray,
-		PropertyType("custom"),
 	}
 	for _, typ := range propertyTypes {
 		if !isKnownFunctionType(propertyFunctionType(typ)) {
 			t.Fatalf("propertyFunctionType(%q) returned unknown function type", typ)
 		}
+	}
+	if got := propertyFunctionType(PropertyType("custom")); got != functionTypeUnsupported {
+		t.Fatalf("custom property function type = %q, want unsupported", got)
 	}
 
 	for _, ret := range []FunctionType{FunctionTypeString, FunctionTypeNumber, FunctionTypeInteger, FunctionTypeBoolean, FunctionTypeDateTime, FunctionTypeGeometry, FunctionTypeArray, FunctionTypeAny} {
@@ -84,6 +92,26 @@ func TestFunctionTypeHelpers(t *testing.T) {
 	if got := functionReturnPropertyType(&FunctionCall{ReturnTypes: []FunctionType{FunctionTypeString, FunctionTypeNumber}}); got != PropertyTypeAny {
 		t.Fatalf("multi-return function property type = %q, want any", got)
 	}
+	if got := functionReturnPropertyType(&FunctionCall{}); got != propertyTypeUnsupported {
+		t.Fatalf("empty function return type = %q, want unsupported", got)
+	}
+	if got := functionReturnPropertyType(&FunctionCall{ReturnTypes: []FunctionType{FunctionType("custom")}}); got != propertyTypeUnsupported {
+		t.Fatalf("custom function return type = %q, want unsupported", got)
+	}
+	if functionTypesOverlap([]FunctionType{functionTypeUnsupported}, []FunctionType{FunctionTypeAny}) {
+		t.Fatal("unsupported function type matched any")
+	}
+	if functionTypesOverlap([]FunctionType{FunctionType("custom")}, []FunctionType{FunctionTypeAny}) {
+		t.Fatal("custom function type matched any")
+	}
+	if functionTypesOverlap(nodeFunctionTypes(&unknownScalarExpression{}), []FunctionType{FunctionTypeAny}) {
+		t.Fatal("unknown scalar type matched any function argument")
+	}
+	if functionTypesOverlap(nodeFunctionTypes(&Literal{Kind: LiteralNull}), []FunctionType{FunctionTypeAny}) {
+		t.Fatal("NULL literal type matched any function argument")
+	}
+	assertParseErrorContains(t, validateComparisonOperands(OpEqual, &unknownScalarExpression{}, &Literal{Kind: LiteralString}, LanguageText), "unsupported")
+	assertParseErrorContains(t, validateComparisonOperands(OpEqual, &FunctionCall{ReturnTypes: []FunctionType{FunctionType("custom")}}, &Literal{Kind: LiteralString}, LanguageText), "unsupported")
 
 	if got := describeFunctionTypes([]FunctionType{FunctionTypeAny, FunctionTypeString}); got != "any or string" {
 		t.Fatalf("describeFunctionTypes = %q", got)
