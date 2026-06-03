@@ -27,6 +27,8 @@ const (
 	FunctionTypeGeometry  FunctionType = "geometry"
 	FunctionTypeBoolean   FunctionType = "boolean"
 	FunctionTypeArray     FunctionType = "array"
+
+	functionTypeUnsupported FunctionType = "\x00unsupported"
 )
 
 // Standard CQL2 text function names.
@@ -203,7 +205,7 @@ func nodeFunctionTypes(node Node) []FunctionType {
 		case LiteralBool:
 			return []FunctionType{FunctionTypeBoolean}
 		default:
-			return []FunctionType{FunctionTypeAny}
+			return []FunctionType{functionTypeUnsupported}
 		}
 	case *PropertyRef:
 		return []FunctionType{propertyFunctionType(value.Type)}
@@ -217,10 +219,7 @@ func nodeFunctionTypes(node Node) []FunctionType {
 	case *TemporalInterval:
 		return []FunctionType{FunctionTypeInterval}
 	case *FunctionCall:
-		if len(value.ReturnTypes) == 0 {
-			return []FunctionType{FunctionTypeAny}
-		}
-		return cloneFunctionTypes(value.ReturnTypes)
+		return functionCallReturnTypes(value)
 	case *ArrayLiteral:
 		return []FunctionType{FunctionTypeArray}
 	case *GeometryLiteral:
@@ -228,7 +227,7 @@ func nodeFunctionTypes(node Node) []FunctionType {
 	case Expression:
 		return []FunctionType{FunctionTypeBoolean}
 	default:
-		return []FunctionType{FunctionTypeAny}
+		return []FunctionType{functionTypeUnsupported}
 	}
 }
 
@@ -256,11 +255,14 @@ func propertyFunctionType(typ PropertyType) FunctionType {
 	case PropertyTypeArray:
 		return FunctionTypeArray
 	default:
-		return FunctionTypeAny
+		return functionTypeUnsupported
 	}
 }
 
 func functionTypeCompatible(expected, actual FunctionType) bool {
+	if !isKnownFunctionType(expected) || !isKnownFunctionType(actual) {
+		return false
+	}
 	if expected == FunctionTypeAny || actual == FunctionTypeAny || expected == actual {
 		return true
 	}
@@ -288,7 +290,20 @@ func functionTypesOverlap(actual, expected []FunctionType) bool {
 }
 
 func functionCallReturns(call *FunctionCall, expected FunctionType) bool {
-	return functionTypesOverlap(call.ReturnTypes, []FunctionType{expected})
+	return functionTypesOverlap(functionCallReturnTypes(call), []FunctionType{expected})
+}
+
+func functionCallReturnTypes(call *FunctionCall) []FunctionType {
+	if len(call.ReturnTypes) == 0 {
+		return []FunctionType{functionTypeUnsupported}
+	}
+	out := cloneFunctionTypes(call.ReturnTypes)
+	for i, typ := range out {
+		if !isKnownFunctionType(typ) {
+			out[i] = functionTypeUnsupported
+		}
+	}
+	return out
 }
 
 func isKnownFunctionType(typ FunctionType) bool {
@@ -377,16 +392,28 @@ func describeFunctionTypes(types []FunctionType) string {
 			parts[i] = "any"
 			continue
 		}
+		if typ == functionTypeUnsupported {
+			parts[i] = "unsupported"
+			continue
+		}
 		parts[i] = string(typ)
 	}
 	return strings.Join(parts, " or ")
 }
 
 func functionReturnPropertyType(call *FunctionCall) PropertyType {
-	if len(call.ReturnTypes) != 1 {
+	returnTypes := functionCallReturnTypes(call)
+	for _, typ := range returnTypes {
+		if typ == functionTypeUnsupported {
+			return propertyTypeUnsupported
+		}
+	}
+	if len(returnTypes) != 1 {
 		return PropertyTypeAny
 	}
-	switch call.ReturnTypes[0] {
+	switch returnTypes[0] {
+	case FunctionTypeAny:
+		return PropertyTypeAny
 	case FunctionTypeString:
 		return PropertyTypeString
 	case FunctionTypeNumber:
@@ -406,6 +433,6 @@ func functionReturnPropertyType(call *FunctionCall) PropertyType {
 	case FunctionTypeArray:
 		return PropertyTypeArray
 	default:
-		return PropertyTypeAny
+		return propertyTypeUnsupported
 	}
 }
