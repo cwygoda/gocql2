@@ -378,11 +378,33 @@ func parseJSONTemporalIntervalEndpoint(raw json.RawMessage, path JSONPath, depth
 		}
 		return &TemporalInstant{Kind: kind, Value: value, Src: lit.Src}, nil
 	}
-	node, err := parseJSONScalar(raw, path, depth+1, cfg)
+
+	var obj rawObject
+	if err := unmarshalAt(raw, path, &obj); err != nil {
+		return nil, err
+	}
+	if propRaw, ok := obj["property"]; ok {
+		var name string
+		if err := unmarshalAt(propRaw, path.Key("property"), &name); err != nil {
+			return nil, jsonPathError(path.Key("property"), "expected string property name")
+		}
+		if name == "" {
+			return nil, jsonPathError(path.Key("property"), "property name must not be empty")
+		}
+		return propertyRef(name, jsonSpan(path), cfg, LanguageJSON, Location{ByteOffset: -1, CharOffset: -1, JSONPath: path.Key("property")})
+	}
+
+	op, err := parseJSONOpObject(raw, path)
 	if err != nil {
 		return nil, err
 	}
-	return node, nil
+	if op.Op == "" {
+		return nil, jsonPathError(path, "expected interval endpoint")
+	}
+	if _, reserved := reservedJSONOps[op.Op]; reserved {
+		return nil, jsonPathError(path.Key("op"), fmt.Sprintf("reserved operation %q cannot be used as an interval endpoint function", op.Op))
+	}
+	return parseJSONFunction(op.Op, op.Args, path, depth+1, cfg)
 }
 
 func parseJSONIsNullOperand(raw json.RawMessage, path JSONPath, depth int, cfg ParseConfig) (Node, error) {
