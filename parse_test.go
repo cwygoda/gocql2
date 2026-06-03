@@ -54,6 +54,42 @@ func TestParserCapabilities(t *testing.T) {
 	}
 }
 
+func TestFunctionOptionsMergeWithConformance(t *testing.T) {
+	lower := FunctionDefinition{
+		Name:    "tolower",
+		Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeString}}},
+		Returns: []FunctionType{FunctionTypeString},
+	}
+
+	parser := NewParser(
+		WithConformance(ConformanceCaseInsensitiveComparison),
+		WithAllowedFunctions(lower),
+	)
+	if _, err := parser.ParseText(`tolower(CASEI(name)) = tolower(CASEI('ALICE'))`); err != nil {
+		t.Fatalf("ParseText with conformance and custom functions: %v", err)
+	}
+
+	parser = NewParser(
+		WithConformance(ConformanceCaseInsensitiveComparison, ConformancePropertyProperty),
+		WithAllowedFunctions(FunctionDefinition{
+			Name:    "casei",
+			Args:    []FunctionArgument{{Name: "value", Types: []FunctionType{FunctionTypeNumber}}},
+			Returns: []FunctionType{FunctionTypeNumber},
+		}),
+	)
+	if _, err := parser.ParseText(`CASEI(1) = 1`); err != nil {
+		t.Fatalf("ParseText with later custom function override: %v", err)
+	}
+
+	parser = NewParser(
+		WithConformance(ConformanceCaseInsensitiveComparison),
+		WithSupportedFunctions("contains"),
+	)
+	if _, err := parser.ParseText(`contains(CASEI(name), CASEI('alice'))`); err != nil {
+		t.Fatalf("ParseText with conformance and supported functions: %v", err)
+	}
+}
+
 func TestAllowedPropertyRegistry(t *testing.T) {
 	typedRegistry := WithAllowedProperties(
 		PropertyDefinition{Name: "name", Type: PropertyTypeString},
