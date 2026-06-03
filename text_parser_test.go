@@ -69,6 +69,53 @@ func TestParseTextReservedKeywords(t *testing.T) {
 	}
 }
 
+func TestParseTextIdentifierGrammar(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "a\u0301 = 1", want: "a\u0301"},               // combining mark as identifier part
+		{input: "a\u203fb = 1", want: "a\u203fb"},             // undertie connector punctuation
+		{input: "\u200cname = 1", want: "\u200cname"},         // zero-width non-joiner as start
+		{input: "\u3001name = 1", want: "\u3001name"},         // CJK punctuation range as start
+		{input: "\U00010000name = 1", want: "\U00010000name"}, // supplementary-plane range as start
+		{input: "\U0001f600name = 1", want: "\U0001f600name"}, // symbol in supplementary-plane range
+		{input: "\"a.b\u0301\u2040c\" = 1", want: "a.b\u0301\u2040c"},
+	}
+	for _, tc := range cases {
+		expr, err := ParseText(tc.input)
+		if err != nil {
+			t.Fatalf("ParseText(%q): %v", tc.input, err)
+		}
+		cmp, ok := expr.(*ComparisonExpression)
+		if !ok {
+			t.Fatalf("%q parsed as %T, want ComparisonExpression", tc.input, expr)
+		}
+		prop, ok := cmp.Left.(*PropertyRef)
+		if !ok {
+			t.Fatalf("%q left = %T, want PropertyRef", tc.input, cmp.Left)
+		}
+		if prop.Name != tc.want {
+			t.Fatalf("%q property name = %q, want %q", tc.input, prop.Name, tc.want)
+		}
+	}
+}
+
+func TestParseTextRejectsInvalidQuotedIdentifiers(t *testing.T) {
+	cases := map[string]string{
+		`"" = 1`:          "quoted identifier must not be empty",
+		`"1abc" = 1`:      "invalid quoted identifier start character",
+		`".abc" = 1`:      "invalid quoted identifier start character",
+		`"has space" = 1`: "invalid quoted identifier character",
+		`"a-b" = 1`:       "invalid quoted identifier character",
+		`"a/b" = 1`:       "invalid quoted identifier character",
+	}
+	for input, want := range cases {
+		_, err := ParseText(input)
+		assertParseErrorContains(t, err, want)
+	}
+}
+
 func TestParseTextLocations(t *testing.T) {
 	_, err := ParseText("name =\n  AND")
 	assertParseErrorContains(t, err, "line 2, column 3")
