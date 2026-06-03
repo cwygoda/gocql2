@@ -2,6 +2,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.7.0 - 2026-06-03
+#### Features
+- merge function parser options - (4aef8a9) - Christian Wygoda
+#### Bug Fixes
+- align geometry parsing with CQL2 schema rules - (37da0ee) - Christian Wygoda
+- enforce JSON temporal oneOf exclusivity - (8cc8c98) - Christian Wygoda
+- gate optional CQL2 syntax by conformance - (ce4ce55) - Christian Wygoda
+- preserve Z coordinates in geometry literals - (b6ca595) - Christian Wygoda
+- support CQL2 text identifier grammar - (3776de2) - Christian Wygoda
+- enforce exact JSON spatial and temporal op casing - (c1b88cd) - Christian Wygoda
+- require UTC timestamps - (3641333) - Christian Wygoda
+- disambiguate signed numbers in text arithmetic - (b65fcf1) - Christian Wygoda
+- allow geometry literals in text arrays - (e55038c) - Christian Wygoda
+- spatial literals in isNull operands - (e9770b0) - Christian Wygoda
+- accept spec JSON a_containedBy op - (0a8d675) - Christian Wygoda
+- fail closed for unknown scalar types - (b7ba649) - Christian Wygoda
+- restrict JSON interval endpoints - (7b8aada) - Christian Wygoda
+
+- - -
+
 ## v0.6.0 - 2026-06-03
 #### Features
 - add conformance helper - (dfbd462) - Christian Wygoda
