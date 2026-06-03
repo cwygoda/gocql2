@@ -75,24 +75,28 @@ func WithAllowedProperties(defs ...PropertyDefinition) ParseOption {
 	}
 }
 
-// WithSupportedFunctions configures a fail-closed name-only function registry.
-// Registered functions accept any number of arguments of any type and have an
-// unknown return type. Use WithAllowedFunctions when signature validation is
-// needed.
+// WithSupportedFunctions adds names to the fail-closed name-only function
+// registry. Registered functions accept any number of arguments of any type and
+// have an unknown return type. Use WithAllowedFunctions when signature
+// validation is needed.
 func WithSupportedFunctions(names ...string) ParseOption {
 	return func(p *Parser) {
-		p.supportedFunctions = functionNames(allowedAnyFunctions(names))
-		p.cfg.functions = newFunctionRegistry(allowedAnyFunctions(names))
+		defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), allowedAnyFunctions(names))
+		p.supportedFunctions = functionNames(defs)
+		p.cfg.functions = newFunctionRegistry(defs)
 	}
 }
 
-// WithAllowedFunctions configures a fail-closed function registry. Any function
-// reference not present in the registry is rejected, and registered signatures
-// are used to validate argument counts, argument types, and return-type contexts.
+// WithAllowedFunctions adds function definitions to the fail-closed function
+// registry. Any function reference not present in the registry is rejected, and
+// registered signatures are used to validate argument counts, argument types,
+// and return-type contexts. Definitions added later override earlier
+// definitions with the same normalized name.
 func WithAllowedFunctions(defs ...FunctionDefinition) ParseOption {
 	return func(p *Parser) {
-		p.supportedFunctions = functionNames(defs)
-		p.cfg.functions = newFunctionRegistry(defs)
+		merged := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), defs)
+		p.supportedFunctions = functionNames(merged)
+		p.cfg.functions = newFunctionRegistry(merged)
 	}
 }
 
