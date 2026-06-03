@@ -298,7 +298,7 @@ const (
 )
 
 // GeometryLiteral represents a parsed CQL2 geometry literal. Coordinates uses
-// GeoJSON coordinate nesting: point [2]float64, line []Coordinate, polygon
+// GeoJSON coordinate nesting: point Coordinate, line []Coordinate, polygon
 // [][]Coordinate, and so on. BBox stores either [minx,miny,maxx,maxy] or
 // [minx,miny,minz,maxx,maxy,maxz].
 type GeometryLiteral struct {
@@ -311,10 +311,13 @@ type GeometryLiteral struct {
 
 func (g *GeometryLiteral) Span() Span { return g.Src }
 
-// Coordinate is a longitude/latitude pair in the default CQL2 CRS.
+// Coordinate is a longitude/latitude pair, optionally with elevation, in the
+// default CQL2 CRS.
 type Coordinate struct {
-	X float64
-	Y float64
+	X    float64
+	Y    float64
+	Z    float64
+	HasZ bool
 }
 
 // PropertyRef references a feature property.

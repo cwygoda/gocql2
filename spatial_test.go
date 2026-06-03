@@ -31,6 +31,32 @@ func TestParseTextSpatialPredicates(t *testing.T) {
 	}
 }
 
+func TestParseTextGeometryPreservesZCoordinates(t *testing.T) {
+	parser := NewParser(WithAllowedProperties(PropertyDefinition{Name: "geom", Type: PropertyTypeGeometry}))
+	expr, err := parser.ParseText(`S_EQUALS(geom,LINESTRING(7 50 1,10 51 2))`)
+	if err != nil {
+		t.Fatalf("ParseText() error = %v", err)
+	}
+	spatial, ok := expr.(*SpatialPredicateExpression)
+	if !ok {
+		t.Fatalf("ParseText() expression = %#v, want spatial predicate", expr)
+	}
+	geom, ok := spatial.Right.(*GeometryLiteral)
+	if !ok {
+		t.Fatalf("right operand = %#v, want geometry literal", spatial.Right)
+	}
+	coords, ok := geom.Coordinates.([]Coordinate)
+	if !ok {
+		t.Fatalf("coordinates = %#v, want coordinate slice", geom.Coordinates)
+	}
+	if got, want := coords[0], (Coordinate{X: 7, Y: 50, Z: 1, HasZ: true}); got != want {
+		t.Fatalf("first coordinate = %#v, want %#v", got, want)
+	}
+	if got, want := coords[1], (Coordinate{X: 10, Y: 51, Z: 2, HasZ: true}); got != want {
+		t.Fatalf("second coordinate = %#v, want %#v", got, want)
+	}
+}
+
 func TestParseTextSpatialValidation(t *testing.T) {
 	cases := map[string]string{
 		`S_INTERSECTS(geom,POINT(90 180))`:                                 "latitude must be between -90 and 90",
@@ -92,6 +118,32 @@ func TestParseJSONSpatialPredicates(t *testing.T) {
 		if !ok || spatial.Op != tc.op {
 			t.Fatalf("%s parsed as %#v, want spatial predicate %s", tc.input, expr, tc.op)
 		}
+	}
+}
+
+func TestParseJSONGeometryPreservesZCoordinates(t *testing.T) {
+	parser := NewParser(WithAllowedProperties(PropertyDefinition{Name: "geom", Type: PropertyTypeGeometry}))
+	expr, err := parser.ParseJSON([]byte(`{"op":"s_equals","args":[{"property":"geom"},{"type":"LineString","coordinates":[[7,50,1],[10,51,2]]}]}`))
+	if err != nil {
+		t.Fatalf("ParseJSON() error = %v", err)
+	}
+	spatial, ok := expr.(*SpatialPredicateExpression)
+	if !ok {
+		t.Fatalf("ParseJSON() expression = %#v, want spatial predicate", expr)
+	}
+	geom, ok := spatial.Right.(*GeometryLiteral)
+	if !ok {
+		t.Fatalf("right operand = %#v, want geometry literal", spatial.Right)
+	}
+	coords, ok := geom.Coordinates.([]Coordinate)
+	if !ok {
+		t.Fatalf("coordinates = %#v, want coordinate slice", geom.Coordinates)
+	}
+	if got, want := coords[0], (Coordinate{X: 7, Y: 50, Z: 1, HasZ: true}); got != want {
+		t.Fatalf("first coordinate = %#v, want %#v", got, want)
+	}
+	if got, want := coords[1], (Coordinate{X: 10, Y: 51, Z: 2, HasZ: true}); got != want {
+		t.Fatalf("second coordinate = %#v, want %#v", got, want)
 	}
 }
 
