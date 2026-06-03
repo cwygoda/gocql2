@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.6.0 - 2026-06-03
+#### Features
+- add conformance helper - (dfbd462) - Christian Wygoda
+
+- - -
+
 ## v0.5.0 - 2026-06-03
 #### Features
 - add spatial predicate parsing and validation - (167ea3a) - Christian Wygoda
