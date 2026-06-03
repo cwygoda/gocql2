@@ -1,6 +1,7 @@
 package gocql2
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -286,6 +287,9 @@ func (p *textParser) finishTextGeometryCollection(nameTok token, depth int) (*Ge
 		if err != nil {
 			return nil, err
 		}
+		if err := validateGeometryCollectionChild(geom, LanguageText); err != nil {
+			return nil, err
+		}
 		geoms = append(geoms, geom)
 		if !p.match(tokenComma, "") {
 			break
@@ -448,7 +452,7 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 		return validateCoordinate(coord)
 	case GeometryTypeMultiPoint:
 		coords, ok := geom.Coordinates.([]Coordinate)
-		if !ok || len(coords) == 0 {
+		if !ok || (source == LanguageText && len(coords) == 0) {
 			return parseError(source, geom.Span().Start, "invalid geometry coordinates")
 		}
 		for _, coord := range coords {
@@ -468,7 +472,7 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 		}
 	case GeometryTypePolygon:
 		rings, ok := geom.Coordinates.([][]Coordinate)
-		if !ok || len(rings) == 0 {
+		if !ok || (source == LanguageText && len(rings) == 0) {
 			return parseError(source, geom.Span().Start, "polygon requires at least one ring")
 		}
 		for _, ring := range rings {
@@ -478,7 +482,7 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 		}
 	case GeometryTypeMultiLineString:
 		lines, ok := geom.Coordinates.([][]Coordinate)
-		if !ok || len(lines) == 0 {
+		if !ok || (source == LanguageText && len(lines) == 0) {
 			return parseError(source, geom.Span().Start, "multilinestring requires at least one line")
 		}
 		for _, line := range lines {
@@ -493,7 +497,7 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 		}
 	case GeometryTypeMultiPolygon:
 		polygons, ok := geom.Coordinates.([][][]Coordinate)
-		if !ok || len(polygons) == 0 {
+		if !ok || (source == LanguageText && len(polygons) == 0) {
 			return parseError(source, geom.Span().Start, "multipolygon requires at least one polygon")
 		}
 		for _, polygon := range polygons {
@@ -507,10 +511,13 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 			}
 		}
 	case GeometryTypeGeometryCollection:
-		if len(geom.Geometries) == 0 {
-			return parseError(source, geom.Span().Start, "geometry collection must not be empty")
+		if len(geom.Geometries) == 0 || (source == LanguageJSON && len(geom.Geometries) < 2) {
+			return parseError(source, geom.Span().Start, "geometry collection requires at least two geometries")
 		}
 		for _, child := range geom.Geometries {
+			if err := validateGeometryCollectionChild(child, source); err != nil {
+				return err
+			}
 			if err := validateGeometryLiteral(child, source); err != nil {
 				return err
 			}
@@ -519,6 +526,20 @@ func validateGeometryLiteral(geom *GeometryLiteral, source Language) error {
 		return parseError(source, geom.Span().Start, fmt.Sprintf("unsupported geometry type %q", geom.Type))
 	}
 	return nil
+}
+
+func validateGeometryCollectionChild(geom *GeometryLiteral, source Language) error {
+	if geom == nil {
+		return parseError(source, NoLocation(), "expected geometry literal")
+	}
+	switch geom.Type {
+	case GeometryTypeBBox:
+		return parseError(source, geom.Span().Start, "geometry collection cannot contain BBOX")
+	case GeometryTypeGeometryCollection:
+		return parseError(source, geom.Span().Start, "geometry collection cannot contain GeometryCollection")
+	default:
+		return nil
+	}
 }
 
 func validateCoordinate(coord Coordinate) error {
@@ -629,18 +650,8 @@ func parseJSONGeometryLiteral(raw json.RawMessage, path JSONPath, depth int, cfg
 	if _, hasOp := obj["op"]; hasOp {
 		return nil, jsonPathError(path, "expected geometry literal")
 	}
-	for key := range obj {
-		switch key {
-		case "type", "coordinates", "geometries", "bbox":
-		default:
-			return nil, jsonPathError(path.Key(key), "unexpected GeoJSON member")
-		}
-	}
 
 	if rawBBox, hasBBox := obj["bbox"]; hasBBox && obj["type"] == nil {
-		if len(obj) != 1 {
-			return nil, jsonPathError(path.Key("type"), "missing GeoJSON type")
-		}
 		bbox, err := parseJSONBBox(rawBBox, path.Key("bbox"))
 		if err != nil {
 			return nil, err
@@ -668,63 +679,42 @@ func parseJSONGeometryLiteral(raw json.RawMessage, path JSONPath, depth int, cfg
 
 	switch GeometryType(typ) {
 	case GeometryTypePoint:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
 		coord, err := parseJSONCoordinate(obj["coordinates"], path.Key("coordinates"))
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = coord
 	case GeometryTypeMultiPoint:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
-		coords, err := parseJSONCoordinateArray(obj["coordinates"], path.Key("coordinates"), 1)
+		coords, err := parseJSONCoordinateArray(obj["coordinates"], path.Key("coordinates"), 0)
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = coords
 	case GeometryTypeLineString:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
 		coords, err := parseJSONCoordinateArray(obj["coordinates"], path.Key("coordinates"), 2)
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = coords
 	case GeometryTypePolygon:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
 		rings, err := parseJSONPolygonCoordinates(obj["coordinates"], path.Key("coordinates"))
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = rings
 	case GeometryTypeMultiLineString:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
 		lines, err := parseJSONMultiLineStringCoordinates(obj["coordinates"], path.Key("coordinates"))
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = lines
 	case GeometryTypeMultiPolygon:
-		if _, hasGeometries := obj["geometries"]; hasGeometries {
-			return nil, jsonPathError(path.Key("geometries"), "unexpected geometries for GeoJSON coordinates geometry")
-		}
 		polygons, err := parseJSONMultiPolygonCoordinates(obj["coordinates"], path.Key("coordinates"))
 		if err != nil {
 			return nil, err
 		}
 		geom.Coordinates = polygons
 	case GeometryTypeGeometryCollection:
-		if _, hasCoordinates := obj["coordinates"]; hasCoordinates {
-			return nil, jsonPathError(path.Key("coordinates"), "unexpected coordinates for GeoJSON geometry collection")
-		}
 		rawGeoms, ok := obj["geometries"]
 		if !ok {
 			return nil, jsonPathError(path.Key("geometries"), "missing geometries")
@@ -733,13 +723,17 @@ func parseJSONGeometryLiteral(raw json.RawMessage, path JSONPath, depth int, cfg
 		if err := unmarshalAt(rawGeoms, path.Key("geometries"), &items); err != nil {
 			return nil, jsonPathError(path.Key("geometries"), "expected array")
 		}
-		if len(items) == 0 {
-			return nil, jsonPathError(path.Key("geometries"), "geometry collection must not be empty")
+		if len(items) < 2 {
+			return nil, jsonPathError(path.Key("geometries"), "geometry collection requires at least two geometries")
 		}
 		geoms := make([]*GeometryLiteral, 0, len(items))
 		for i, item := range items {
-			child, err := parseJSONGeometryLiteral(item, path.Key("geometries").Index(i), depth+1, cfg)
+			childPath := path.Key("geometries").Index(i)
+			child, err := parseJSONGeometryLiteral(item, childPath, depth+1, cfg)
 			if err != nil {
+				return nil, err
+			}
+			if err := validateGeometryCollectionChild(child, LanguageJSON); err != nil {
 				return nil, err
 			}
 			geoms = append(geoms, child)
@@ -753,6 +747,14 @@ func parseJSONGeometryLiteral(raw json.RawMessage, path JSONPath, depth int, cfg
 		return nil, err
 	}
 	return geom, nil
+}
+
+func requireJSONArray(raw json.RawMessage, path JSONPath, message string) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return jsonPathError(path, message)
+	}
+	return nil
 }
 
 func parseJSONBBox(raw json.RawMessage, path JSONPath) ([]float64, error) {
@@ -780,6 +782,9 @@ func parseJSONBBox(raw json.RawMessage, path JSONPath) ([]float64, error) {
 func parseJSONCoordinate(raw json.RawMessage, path JSONPath) (Coordinate, error) {
 	if len(raw) == 0 {
 		return Coordinate{}, jsonPathError(path, "missing coordinates")
+	}
+	if err := requireJSONArray(raw, path, "expected coordinate array"); err != nil {
+		return Coordinate{}, err
 	}
 	var items []json.RawMessage
 	if err := unmarshalAt(raw, path, &items); err != nil {
@@ -815,6 +820,9 @@ func parseJSONCoordinateArray(raw json.RawMessage, path JSONPath, minCoords int)
 	if len(raw) == 0 {
 		return nil, jsonPathError(path, "missing coordinates")
 	}
+	if err := requireJSONArray(raw, path, "expected coordinate array"); err != nil {
+		return nil, err
+	}
 	var items []json.RawMessage
 	if err := unmarshalAt(raw, path, &items); err != nil {
 		return nil, jsonPathError(path, "expected coordinate array")
@@ -834,12 +842,12 @@ func parseJSONCoordinateArray(raw json.RawMessage, path JSONPath, minCoords int)
 }
 
 func parseJSONPolygonCoordinates(raw json.RawMessage, path JSONPath) ([][]Coordinate, error) {
+	if err := requireJSONArray(raw, path, "expected polygon coordinates"); err != nil {
+		return nil, err
+	}
 	var items []json.RawMessage
 	if err := unmarshalAt(raw, path, &items); err != nil {
 		return nil, jsonPathError(path, "expected polygon coordinates")
-	}
-	if len(items) == 0 {
-		return nil, jsonPathError(path, "polygon requires at least one ring")
 	}
 	rings := make([][]Coordinate, 0, len(items))
 	for i, item := range items {
@@ -856,12 +864,12 @@ func parseJSONPolygonCoordinates(raw json.RawMessage, path JSONPath) ([][]Coordi
 }
 
 func parseJSONMultiLineStringCoordinates(raw json.RawMessage, path JSONPath) ([][]Coordinate, error) {
+	if err := requireJSONArray(raw, path, "expected multilinestring coordinates"); err != nil {
+		return nil, err
+	}
 	var items []json.RawMessage
 	if err := unmarshalAt(raw, path, &items); err != nil {
 		return nil, jsonPathError(path, "expected multilinestring coordinates")
-	}
-	if len(items) == 0 {
-		return nil, jsonPathError(path, "multilinestring requires at least one line")
 	}
 	lines := make([][]Coordinate, 0, len(items))
 	for i, item := range items {
@@ -875,12 +883,12 @@ func parseJSONMultiLineStringCoordinates(raw json.RawMessage, path JSONPath) ([]
 }
 
 func parseJSONMultiPolygonCoordinates(raw json.RawMessage, path JSONPath) ([][][]Coordinate, error) {
+	if err := requireJSONArray(raw, path, "expected multipolygon coordinates"); err != nil {
+		return nil, err
+	}
 	var items []json.RawMessage
 	if err := unmarshalAt(raw, path, &items); err != nil {
 		return nil, jsonPathError(path, "expected multipolygon coordinates")
-	}
-	if len(items) == 0 {
-		return nil, jsonPathError(path, "multipolygon requires at least one polygon")
 	}
 	polygons := make([][][]Coordinate, 0, len(items))
 	for i, item := range items {
