@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.5.0 - 2026-06-03
+#### Features
+- add spatial predicate parsing and validation - (167ea3a) - Christian Wygoda
+
+- - -
+
 ## v0.4.0 - 2026-06-03
 #### Features
 - add temporal predicate parsing - (fc4fc40) - Christian Wygoda
