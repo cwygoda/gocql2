@@ -113,6 +113,23 @@ func TestTemporalLiteralsInScalarAndValueContexts(t *testing.T) {
 	}
 }
 
+func TestParseJSONTemporalInstanceRequiresExactlyOneKind(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{name: "date and timestamp", in: `{"op":"=","args":[{"property":"event_time"},{"date":"2024-01-01","timestamp":"2024-01-01T00:00:00Z"}]}`},
+		{name: "date and interval", in: `{"op":"t_after","args":[{"date":"2024-01-01","interval":["2024-01-01","2024-01-02"]},{"property":"event_time"}]}`},
+		{name: "timestamp and interval is null", in: `{"op":"isNull","args":[{"timestamp":"2024-01-01T00:00:00Z","interval":["2024-01-01T00:00:00Z","2024-01-02T00:00:00Z"]}]}`},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseJSON([]byte(tt.in), WithConformance(ConformanceTemporalFunctions))
+			assertParseErrorContains(t, err, "exactly one of date, timestamp, or interval")
+		})
+	}
+}
+
 func TestTimestampRequiresUTC(t *testing.T) {
 	_, err := ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`)
 	assertParseErrorContains(t, err, "ending in Z")

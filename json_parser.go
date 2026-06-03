@@ -335,11 +335,14 @@ func parseJSONTemporalInstance(raw json.RawMessage, path JSONPath, depth int, cf
 	if err := unmarshalAt(raw, path, &obj); err != nil {
 		return nil, err
 	}
+	if err := validateJSONTemporalInstanceOneOf(obj, path); err != nil {
+		return nil, err
+	}
 	if _, ok := obj["date"]; ok {
-		return parseJSONTemporalInstant(raw, path)
+		return parseJSONTemporalInstantFromObject(obj, path)
 	}
 	if _, ok := obj["timestamp"]; ok {
-		return parseJSONTemporalInstant(raw, path)
+		return parseJSONTemporalInstantFromObject(obj, path)
 	}
 	if _, ok := obj["interval"]; ok {
 		return parseJSONTemporalInterval(raw, path, depth+1, cfg)
@@ -347,11 +350,35 @@ func parseJSONTemporalInstance(raw json.RawMessage, path JSONPath, depth int, cf
 	return nil, jsonPathError(path, "expected temporal instance")
 }
 
+func validateJSONTemporalInstanceOneOf(obj rawObject, path JSONPath) error {
+	matches := 0
+	if _, ok := obj["date"]; ok {
+		matches++
+	}
+	if _, ok := obj["timestamp"]; ok {
+		matches++
+	}
+	if _, ok := obj["interval"]; ok {
+		matches++
+	}
+	if matches > 1 {
+		return jsonPathError(path, "temporal instance must contain exactly one of date, timestamp, or interval")
+	}
+	return nil
+}
+
 func parseJSONTemporalInstant(raw json.RawMessage, path JSONPath) (*TemporalInstant, error) {
 	var obj rawObject
 	if err := unmarshalAt(raw, path, &obj); err != nil {
 		return nil, err
 	}
+	if err := validateJSONTemporalInstanceOneOf(obj, path); err != nil {
+		return nil, err
+	}
+	return parseJSONTemporalInstantFromObject(obj, path)
+}
+
+func parseJSONTemporalInstantFromObject(obj rawObject, path JSONPath) (*TemporalInstant, error) {
 	if rawDate, ok := obj["date"]; ok {
 		var value string
 		if err := unmarshalAt(rawDate, path.Key("date"), &value); err != nil {
@@ -383,6 +410,13 @@ func parseJSONTemporalInterval(raw json.RawMessage, path JSONPath, depth int, cf
 	if err := unmarshalAt(raw, path, &obj); err != nil {
 		return nil, err
 	}
+	if err := validateJSONTemporalInstanceOneOf(obj, path); err != nil {
+		return nil, err
+	}
+	return parseJSONTemporalIntervalFromObject(obj, path, depth, cfg)
+}
+
+func parseJSONTemporalIntervalFromObject(obj rawObject, path JSONPath, depth int, cfg ParseConfig) (*TemporalInterval, error) {
 	rawInterval, ok := obj["interval"]
 	if !ok {
 		return nil, jsonPathError(path.Key("interval"), "missing interval")
@@ -470,6 +504,8 @@ func parseJSONIsNullOperand(raw json.RawMessage, path JSONPath, depth int, cfg P
 	}
 	if temporal, err := parseJSONTemporalInstance(raw, path, depth, cfg); err == nil {
 		return temporal, nil
+	} else if hasJSONTemporalInstanceKey(raw, path) {
+		return nil, err
 	}
 	if geom, err := parseJSONGeometryLiteral(raw, path, depth, cfg); err == nil {
 		return geom, nil
