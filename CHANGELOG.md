@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.0 - 2026-06-04
+#### Features
+- make parser setup chainable - (18eb5cf) - Christian Wygoda
+#### Refactoring
+- split public api packages - (4caaeac) - Christian Wygoda
+
+- - -
+
 ## v0.8.1 - 2026-06-04
 #### Bug Fixes
 - coalesce negated SQL predicates - (923a90e) - Christian Wygoda
