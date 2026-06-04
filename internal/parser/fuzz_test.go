@@ -28,7 +28,7 @@ func FuzzParseTextDoesNotPanic(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, input string) {
-		if _, err := ParseText(input, WithMaxDepth(32)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).ParseText(input); err != nil {
 			return
 		}
 	})
@@ -43,14 +43,14 @@ func FuzzParseTextWithFunctionRegistryDoesNotPanic(f *testing.F) {
 	} {
 		f.Add(seed)
 	}
-	parser := NewParser(WithAllowedFunctions(api.FunctionDefinition{
+	parser := NewParser().WithAllowedFunctions(api.FunctionDefinition{
 		Name: "has_text",
 		Args: []api.FunctionArgument{
 			{Name: "value", Types: []api.FunctionType{api.FunctionTypeString}},
 			{Name: "needle", Types: []api.FunctionType{api.FunctionTypeString}, Variadic: true},
 		},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
-	}))
+	})
 	f.Fuzz(func(t *testing.T, input string) {
 		if _, err := parser.ParseText(input); err != nil {
 			return
@@ -83,7 +83,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf("ACCENTI(CASEI(name)) LIKE accenti(casei(%s))", textLiteral),
 		}
 		for _, input := range textInputs {
-			if _, err := ParseText(input, WithMaxDepth(32), WithConformance(api.ConformanceAdvancedComparisonOperators), WithAllowedFunctions(api.StandardTextFunctions()...)); err != nil {
+			if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceAdvancedComparisonOperators).WithAllowedFunctions(api.StandardTextFunctions()...).ParseText(input); err != nil {
 				t.Fatalf("ParseText(%q): %v", input, err)
 			}
 		}
@@ -98,7 +98,7 @@ func FuzzStandardTextFunctionsDoNotPanic(f *testing.F) {
 			fmt.Sprintf(`{"op":"like","args":[{"op":"accenti","args":[{"op":"casei","args":[{"property":"name"}]}]},{"op":"accenti","args":[{"op":"casei","args":[%s]}]}]}`, jsonLiteral),
 		}
 		for _, input := range jsonInputs {
-			if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(api.ConformanceAdvancedComparisonOperators), WithAllowedFunctions(api.StandardTextFunctions()...)); err != nil {
+			if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceAdvancedComparisonOperators).WithAllowedFunctions(api.StandardTextFunctions()...).ParseJSON([]byte(input)); err != nil {
 				t.Fatalf("ParseJSON(%s): %v", input, err)
 			}
 		}
@@ -132,12 +132,12 @@ func FuzzSpatialPredicatesDoNotPanic(f *testing.F) {
 		}
 
 		text := fmt.Sprintf("%s(geom,POINT(%g %g))", strings.ToUpper(op), x, y)
-		if _, err := ParseText(text, WithMaxDepth(32), WithConformance(api.ConformanceSpatialFunctions)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceSpatialFunctions).ParseText(text); err != nil {
 			t.Fatalf("ParseText(%q): %v", text, err)
 		}
 
 		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"geom"},{"type":"Point","coordinates":[%g,%g]}]}`, op, x, y)
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(api.ConformanceSpatialFunctions)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceSpatialFunctions).ParseJSON([]byte(input)); err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
 	})
@@ -163,7 +163,7 @@ func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 		}
 
 		text := fmt.Sprintf("%s(tags, (%s, %s))", strings.ToUpper(op), cqlTextString(first), cqlTextString(second))
-		if _, err := ParseText(text, WithMaxDepth(32), WithConformance(api.ConformanceArrayFunctions)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceArrayFunctions).ParseText(text); err != nil {
 			t.Fatalf("ParseText(%q): %v", text, err)
 		}
 
@@ -180,7 +180,7 @@ func FuzzArrayPredicatesDoNotPanic(f *testing.F) {
 			jsonOp = "a_containedBy"
 		}
 		input := fmt.Sprintf(`{"op":%q,"args":[{"property":"tags"},[%s,%s]]}`, jsonOp, jsonFirst, jsonSecond)
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32), WithConformance(api.ConformanceArrayFunctions)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).WithConformance(api.ConformanceArrayFunctions).ParseJSON([]byte(input)); err != nil {
 			t.Fatalf("ParseJSON(%s): %v", input, err)
 		}
 	})
@@ -204,7 +204,7 @@ func FuzzParseJSONDoesNotPanic(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, input string) {
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).ParseJSON([]byte(input)); err != nil {
 			return
 		}
 	})
@@ -237,7 +237,7 @@ func FuzzTemporalPredicatesDoNotPanic(f *testing.F) {
 			left = "INTERVAL(start_time,end_time)"
 		}
 		text := fmt.Sprintf("%s(%s,INTERVAL(%s,%s))", strings.ToUpper(op), left, cqlTextString(start), cqlTextString(end))
-		if _, err := ParseText(text, WithMaxDepth(32)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).ParseText(text); err != nil {
 			return
 		}
 
@@ -254,7 +254,7 @@ func FuzzTemporalPredicatesDoNotPanic(f *testing.F) {
 			jsonLeft = `{"interval":[{"property":"start_time"},{"property":"end_time"}]}`
 		}
 		input := fmt.Sprintf(`{"op":%q,"args":[%s,{"interval":[%s,%s]}]}`, op, jsonLeft, jsonStart, jsonEnd)
-		if _, err := ParseJSON([]byte(input), WithMaxDepth(32)); err != nil {
+		if _, err := NewParser().WithMaxDepth(32).ParseJSON([]byte(input)); err != nil {
 			return
 		}
 	})
