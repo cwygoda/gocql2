@@ -1,78 +1,40 @@
 package gocql2
 
 import (
-	"fmt"
-	"sort"
+	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/cql2/internal/parser"
 )
-
-const defaultMaxDepth = 128
-
-// ParseConfig configures parser behavior.
-type ParseConfig struct {
-	properties  propertyRegistry
-	functions   functionRegistry
-	conformance conformanceCapabilities
-
-	MaxDepth int
-}
 
 // Parser parses CQL2 and exposes the capabilities it was configured with.
 type Parser struct {
-	supportedProperties []string
-	supportedFunctions  []string
-	conformanceClasses  []string
-	cfg                 ParseConfig
+	inner *parser.Parser
 }
 
-// ParseOption mutates Parser configuration.
-type ParseOption func(*Parser)
+// ParseOption configures parser behavior.
+type ParseOption struct {
+	inner parser.ParseOption
+}
 
 // NewParser builds a reusable parser.
 func NewParser(opts ...ParseOption) *Parser {
-	p := &Parser{
-		cfg: ParseConfig{MaxDepth: defaultMaxDepth, functions: functionRegistryDefaults()},
-	}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(p)
-		}
-	}
-	if p.cfg.MaxDepth <= 0 {
-		p.cfg.MaxDepth = defaultMaxDepth
-	}
-	if !p.cfg.functions.initialized {
-		p.cfg.functions = functionRegistryDefaults()
-	}
-	return p
+	return &Parser{inner: parser.NewParser(parserOptions(opts)...)}
 }
 
 // WithMaxDepth limits recursive parse depth.
-func WithMaxDepth(n int) ParseOption {
-	return func(p *Parser) { p.cfg.MaxDepth = n }
-}
+func WithMaxDepth(n int) ParseOption { return parseOption(parser.WithMaxDepth(n)) }
 
 // WithSupportedProperties records the parser's advertised property set and
 // restricts parsing to that allow-list. Properties are treated as untyped; use
 // WithAllowedProperties when type validation is needed.
 func WithSupportedProperties(names ...string) ParseOption {
-	return func(p *Parser) {
-		p.supportedProperties = cloneStrings(names)
-		defs := make([]PropertyDefinition, 0, len(names))
-		for _, name := range names {
-			defs = append(defs, PropertyDefinition{Name: name, Type: PropertyTypeAny})
-		}
-		p.cfg.properties = newPropertyRegistry(defs, true)
-	}
+	return parseOption(parser.WithSupportedProperties(names...))
 }
 
 // WithAllowedProperties configures a fail-closed property registry. Any property
 // reference not present in the registry is rejected, and registered types are
 // used to validate character, numeric, comparison, and IN-list contexts.
-func WithAllowedProperties(defs ...PropertyDefinition) ParseOption {
-	return func(p *Parser) {
-		p.supportedProperties = propertyNames(defs)
-		p.cfg.properties = newPropertyRegistry(defs, true)
-	}
+func WithAllowedProperties(defs ...api.PropertyDefinition) ParseOption {
+	return parseOption(parser.WithAllowedProperties(defs...))
 }
 
 // WithSupportedFunctions adds names to the fail-closed name-only function
@@ -80,11 +42,7 @@ func WithAllowedProperties(defs ...PropertyDefinition) ParseOption {
 // have an unknown return type. Use WithAllowedFunctions when signature
 // validation is needed.
 func WithSupportedFunctions(names ...string) ParseOption {
-	return func(p *Parser) {
-		defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), allowedAnyFunctions(names))
-		p.supportedFunctions = functionNames(defs)
-		p.cfg.functions = newFunctionRegistry(defs)
-	}
+	return parseOption(parser.WithSupportedFunctions(names...))
 }
 
 // WithAllowedFunctions adds function definitions to the fail-closed function
@@ -92,121 +50,82 @@ func WithSupportedFunctions(names ...string) ParseOption {
 // registered signatures are used to validate argument counts, argument types,
 // and return-type contexts. Definitions added later override earlier
 // definitions with the same normalized name.
-func WithAllowedFunctions(defs ...FunctionDefinition) ParseOption {
-	return func(p *Parser) {
-		merged := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), defs)
-		p.supportedFunctions = functionNames(merged)
-		p.cfg.functions = newFunctionRegistry(merged)
-	}
+func WithAllowedFunctions(defs ...api.FunctionDefinition) ParseOption {
+	return parseOption(parser.WithAllowedFunctions(defs...))
 }
 
 // WithConformanceClasses records the parser's advertised conformance classes.
 func WithConformanceClasses(classes ...string) ParseOption {
-	return func(p *Parser) { p.conformanceClasses = cloneStrings(classes) }
+	return parseOption(parser.WithConformanceClasses(classes...))
+}
+
+// WithConformance records CQL2 conformance classes and configures the standard
+// functions required by those classes. Arguments may be api conformance
+// constants, full CQL2 conformance/requirements URIs, /conf/<class> fragments,
+// or class slugs such as "case-insensitive-comparison".
+//
+// The Functions conformance class does not define any concrete function names;
+// combine it with WithAllowedFunctions or WithSupportedFunctions to advertise
+// implementation-specific functions.
+func WithConformance(classes ...string) ParseOption {
+	return parseOption(parser.WithConformance(classes...))
 }
 
 // SupportedProperties returns the advertised property names.
-func (p *Parser) SupportedProperties() []string {
-	return cloneStrings(p.supportedProperties)
-}
+func (p *Parser) SupportedProperties() []string { return p.inner.SupportedProperties() }
 
 // SupportedPropertyDefinitions returns the configured allowed properties.
-func (p *Parser) SupportedPropertyDefinitions() []PropertyDefinition {
-	return clonePropertyDefinitions(p.cfg.properties.defs)
+func (p *Parser) SupportedPropertyDefinitions() []api.PropertyDefinition {
+	return p.inner.SupportedPropertyDefinitions()
 }
 
 // SupportedFunctions returns the advertised function names.
-func (p *Parser) SupportedFunctions() []string {
-	return cloneStrings(p.supportedFunctions)
-}
+func (p *Parser) SupportedFunctions() []string { return p.inner.SupportedFunctions() }
 
 // SupportedFunctionDefinitions returns the configured allowed functions.
-func (p *Parser) SupportedFunctionDefinitions() []FunctionDefinition {
-	return cloneFunctionDefinitions(p.cfg.functions.defs)
+func (p *Parser) SupportedFunctionDefinitions() []api.FunctionDefinition {
+	return p.inner.SupportedFunctionDefinitions()
 }
 
 // ConformanceClasses returns the advertised conformance class IDs.
-func (p *Parser) ConformanceClasses() []string {
-	return cloneStrings(p.conformanceClasses)
-}
+func (p *Parser) ConformanceClasses() []string { return p.inner.ConformanceClasses() }
 
 // Parse parses input in the requested CQL2 language.
-func (p *Parser) Parse(input []byte, lang Language) (Expression, error) {
-	switch lang {
-	case LanguageText:
-		return p.ParseText(string(input))
-	case LanguageJSON:
-		return p.ParseJSON(input)
-	default:
-		return nil, fmt.Errorf("unsupported CQL2 language %q", lang)
-	}
+func (p *Parser) Parse(input []byte, lang api.Language) (api.Expression, error) {
+	return p.inner.Parse(input, lang)
 }
 
 // ParseText parses CQL2 Text into an AST.
-func (p *Parser) ParseText(input string) (Expression, error) {
-	return parseText(input, p.cfg)
-}
+func (p *Parser) ParseText(input string) (api.Expression, error) { return p.inner.ParseText(input) }
 
 // ParseJSON parses CQL2 JSON into an AST.
-func (p *Parser) ParseJSON(input []byte) (Expression, error) {
-	return parseJSON(input, p.cfg)
-}
+func (p *Parser) ParseJSON(input []byte) (api.Expression, error) { return p.inner.ParseJSON(input) }
 
 // Parse parses input in the requested CQL2 language.
-func Parse(input []byte, lang Language, opts ...ParseOption) (Expression, error) {
+func Parse(input []byte, lang api.Language, opts ...ParseOption) (api.Expression, error) {
 	return NewParser(opts...).Parse(input, lang)
 }
 
 // ParseText parses CQL2 Text into an AST.
-func ParseText(input string, opts ...ParseOption) (Expression, error) {
+func ParseText(input string, opts ...ParseOption) (api.Expression, error) {
 	return NewParser(opts...).ParseText(input)
 }
 
 // ParseJSON parses CQL2 JSON into an AST.
-func ParseJSON(input []byte, opts ...ParseOption) (Expression, error) {
+func ParseJSON(input []byte, opts ...ParseOption) (api.Expression, error) {
 	return NewParser(opts...).ParseJSON(input)
 }
 
-func applyParseConfigDefaults(cfg ParseConfig) ParseConfig {
-	if cfg.MaxDepth <= 0 {
-		cfg.MaxDepth = defaultMaxDepth
-	}
-	if !cfg.functions.initialized {
-		cfg.functions = functionRegistryDefaults()
-	}
-	return cfg
+func parseOption(opt parser.ParseOption) ParseOption {
+	return ParseOption{inner: opt}
 }
 
-func cloneStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]string, len(values))
-	copy(out, values)
-	return out
-}
-
-func propertyNames(defs []PropertyDefinition) []string {
-	if len(defs) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(defs))
-	for _, def := range defs {
-		if def.Name != "" {
-			names = append(names, def.Name)
+func parserOptions(opts []ParseOption) []parser.ParseOption {
+	out := make([]parser.ParseOption, 0, len(opts))
+	for _, opt := range opts {
+		if opt.inner != nil {
+			out = append(out, opt.inner)
 		}
 	}
-	return names
-}
-
-func clonePropertyDefinitions(defs map[string]PropertyDefinition) []PropertyDefinition {
-	if len(defs) == 0 {
-		return nil
-	}
-	out := make([]PropertyDefinition, 0, len(defs))
-	for _, def := range defs {
-		out = append(out, def)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
