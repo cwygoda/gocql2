@@ -38,6 +38,11 @@ const (
 	spatialLogicalATSID           = "/conf/spatial-functions/logical"
 	temporalTestDataATSID         = "/conf/temporal-functions/test-data"
 	temporalLogicalATSID          = "/conf/temporal-functions/logical"
+	valuePropertyATSID            = "/conf/property-property/comparison-value-property"
+	propertyPropertyATSID         = "/conf/property-property/comparison-property-property"
+	valueValueATSID               = "/conf/property-property/comparison-value-value"
+	propertyPropertyTestDataATSID = "/conf/property-property/test-data"
+	propertyPropertyLogicalATSID  = "/conf/property-property/logical"
 )
 
 //nolint:govet // Test evaluation records keep filter/query metadata before result payloads.
@@ -84,7 +89,12 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		spatialTestDataATSID,
 		spatialLogicalATSID,
 		temporalTestDataATSID,
-		temporalLogicalATSID:
+		temporalLogicalATSID,
+		valuePropertyATSID,
+		propertyPropertyATSID,
+		valueValueATSID,
+		propertyPropertyTestDataATSID,
+		propertyPropertyLogicalATSID:
 		return true
 	default:
 		return false
@@ -181,7 +191,7 @@ func (s *cql2ATSSuite) assertAtLeastOneScalarQueryable() error {
 }
 
 func (s *cql2ATSSuite) forEachScalarQueryableEvaluateComparisonFilters() error {
-	if s.current.ID != basicComparisonATSID {
+	if s.current.ID != basicComparisonATSID && s.current.ID != valuePropertyATSID && s.current.ID != propertyPropertyATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -244,6 +254,67 @@ func (s *cql2ATSSuite) evaluateQueryableValueComparisonTemplate(template string)
 		filter := queryable.Name + " " + op + " " + atsComparisonLiteralForType(queryable.Type)
 		s.recordATSEvaluation(filter, queryable.Name, op, nil)
 	}
+	return nil
+}
+
+func (s *cql2ATSSuite) evaluateValueQueryableComparisonTemplate(template string) error {
+	if s.current.ID != valuePropertyATSID {
+		return nil
+	}
+	s.executedByStep = true
+	op := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(template, "{value}"), "{queryable}"))
+	for _, queryable := range atsFixtureQueryablesOfTypes(PropertyTypeString, PropertyTypeBoolean, PropertyTypeNumber, PropertyTypeInteger, PropertyTypeTimestamp, PropertyTypeDate) {
+		filter := atsComparisonLiteralForType(queryable.Type) + " " + op + " " + queryable.Name
+		s.recordATSEvaluation(filter, queryable.Name, op, nil)
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) evaluateQueryableQueryableComparisonTemplate(template string) error {
+	if s.current.ID != propertyPropertyATSID {
+		return nil
+	}
+	s.executedByStep = true
+	op := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(template, "{queryable}"), "{queryable}"))
+	for _, queryable := range atsFixtureQueryablesOfTypes(PropertyTypeString, PropertyTypeBoolean, PropertyTypeNumber, PropertyTypeInteger, PropertyTypeTimestamp, PropertyTypeDate) {
+		filter := queryable.Name + " " + op + " " + queryable.Name
+		s.recordATSEvaluation(filter, queryable.Name, op, nil)
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) evaluateValueValueComparisonTemplate(template string) error {
+	if s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
+	op := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(template, "{value}"), "{value}"))
+	filter := "'foo' " + op + " 'foo'"
+	s.recordATSEvaluation(filter, "value", op, nil)
+	return nil
+}
+
+func (s *cql2ATSSuite) evaluateFollowingFilterExpressions() error {
+	if s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
+	return nil
+}
+
+func (s *cql2ATSSuite) acknowledgeValueList() error {
+	if s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
+	return nil
+}
+
+func (s *cql2ATSSuite) acknowledgeValueLiteral() error {
+	if s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
 	return nil
 }
 
@@ -324,7 +395,8 @@ func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
 		s.current.ID != basicSpatialTestDataATSID &&
 		s.current.ID != basicSpatialPlusTestDataATSID &&
 		s.current.ID != spatialTestDataATSID &&
-		s.current.ID != temporalTestDataATSID {
+		s.current.ID != temporalTestDataATSID &&
+		s.current.ID != propertyPropertyTestDataATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -394,11 +466,36 @@ func (s *cql2ATSSuite) assertExpectedATSResultsReturned() error {
 }
 
 func (s *cql2ATSSuite) assertOperatorResultSetsDisjoint(left, right string) error {
-	if s.current.ID != basicComparisonATSID {
+	if s.current.ID != basicComparisonATSID && s.current.ID != valuePropertyATSID {
 		return nil
 	}
 	s.executedByStep = true
 	return s.assertEvaluationsByQueryablePair(left, right, atsAssertDisjoint)
+}
+
+func (s *cql2ATSSuite) assertOperatorResultSetsEmpty() error {
+	if s.current.ID != propertyPropertyATSID && s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
+	emptyOps := map[string]struct{}{"<>": {}, "<": {}, ">": {}}
+	for _, evaluation := range s.atsEvaluations {
+		if _, ok := emptyOps[evaluation.Key]; ok && len(evaluation.IDs) != 0 {
+			return fmt.Errorf("%s filter %q returned %#v, want empty result set", evaluation.Key, evaluation.Filter, evaluation.IDs)
+		}
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) assertOperatorResultSetsIdentical() error {
+	if s.current.ID != propertyPropertyATSID && s.current.ID != valueValueATSID {
+		return nil
+	}
+	s.executedByStep = true
+	if err := s.assertEvaluationsByQueryablePair("=", ">=", atsAssertIdentical); err != nil {
+		return err
+	}
+	return s.assertEvaluationsByQueryablePair("=", "<=", atsAssertIdentical)
 }
 
 func (s *cql2ATSSuite) assertPairedResultSetsDisjoint() error {
@@ -505,6 +602,8 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 		return predicate.Conformance == ConformanceSpatialFunctions
 	case temporalTestDataATSID:
 		return predicate.Conformance == ConformanceTemporalFunctions
+	case propertyPropertyTestDataATSID:
+		return predicate.Conformance == ConformancePropertyProperty
 	default:
 		return false
 	}
@@ -518,7 +617,8 @@ func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
 		accentiLogicalATSID,
 		basicSpatialLogicalATSID,
 		spatialLogicalATSID,
-		temporalLogicalATSID:
+		temporalLogicalATSID,
+		propertyPropertyLogicalATSID:
 		return true
 	default:
 		return false
@@ -674,7 +774,7 @@ func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredic
 		switch atsID {
 		case basicLogicalATSID:
 			matched = (!p2 && p1) || (p3 && p4) || (!p1 && !p4)
-		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID, temporalLogicalATSID:
+		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID, temporalLogicalATSID, propertyPropertyLogicalATSID:
 			matched = (!p1 && p2) || (p3 && !p4) || !p1 || !p4
 		}
 		if matched {
