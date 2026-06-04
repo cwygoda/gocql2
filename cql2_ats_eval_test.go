@@ -10,27 +10,32 @@ import (
 )
 
 const (
-	basicTestATSID        = "/conf/basic-cql2/basic-test"
-	basicComparisonATSID  = "/conf/basic-cql2/comparison"
-	basicIsNullATSID      = "/conf/basic-cql2/is-null"
-	basicBooleanATSID     = "/conf/basic-cql2/boolean"
-	basicTestDataATSID    = "/conf/basic-cql2/test-data"
-	basicLogicalATSID     = "/conf/basic-cql2/logical"
-	advancedLikeATSID     = "/conf/advanced-comparison-operators/like"
-	advancedBetweenATSID  = "/conf/advanced-comparison-operators/between"
-	advancedInATSID       = "/conf/advanced-comparison-operators/in"
-	advancedTestDataATSID = "/conf/advanced-comparison-operators/test-data"
-	advancedLogicalATSID  = "/conf/advanced-comparison-operators/logical"
-	caseiATSID            = "/conf/case-insensitive-comparison/casei"
-	caseiLikeATSID        = "/conf/case-insensitive-comparison/casei-like"
-	caseiTestDataATSID    = "/conf/case-insensitive-comparison/test-data"
-	caseiLogicalATSID     = "/conf/case-insensitive-comparison/logical"
-	accentiATSID          = "/conf/accent-insensitive-comparison/accenti"
-	accentiLikeATSID      = "/conf/accent-insensitive-comparison/accenti-like"
-	accentiCaseiATSID     = "/conf/accent-insensitive-comparison/accenti-casei"
-	accentiCaseiLikeATSID = "/conf/accent-insensitive-comparison/accenti-casei-like"
-	accentiTestDataATSID  = "/conf/accent-insensitive-comparison/test-data"
-	accentiLogicalATSID   = "/conf/accent-insensitive-comparison/logical"
+	basicTestATSID                = "/conf/basic-cql2/basic-test"
+	basicComparisonATSID          = "/conf/basic-cql2/comparison"
+	basicIsNullATSID              = "/conf/basic-cql2/is-null"
+	basicBooleanATSID             = "/conf/basic-cql2/boolean"
+	basicTestDataATSID            = "/conf/basic-cql2/test-data"
+	basicLogicalATSID             = "/conf/basic-cql2/logical"
+	advancedLikeATSID             = "/conf/advanced-comparison-operators/like"
+	advancedBetweenATSID          = "/conf/advanced-comparison-operators/between"
+	advancedInATSID               = "/conf/advanced-comparison-operators/in"
+	advancedTestDataATSID         = "/conf/advanced-comparison-operators/test-data"
+	advancedLogicalATSID          = "/conf/advanced-comparison-operators/logical"
+	caseiATSID                    = "/conf/case-insensitive-comparison/casei"
+	caseiLikeATSID                = "/conf/case-insensitive-comparison/casei-like"
+	caseiTestDataATSID            = "/conf/case-insensitive-comparison/test-data"
+	caseiLogicalATSID             = "/conf/case-insensitive-comparison/logical"
+	accentiATSID                  = "/conf/accent-insensitive-comparison/accenti"
+	accentiLikeATSID              = "/conf/accent-insensitive-comparison/accenti-like"
+	accentiCaseiATSID             = "/conf/accent-insensitive-comparison/accenti-casei"
+	accentiCaseiLikeATSID         = "/conf/accent-insensitive-comparison/accenti-casei-like"
+	accentiTestDataATSID          = "/conf/accent-insensitive-comparison/test-data"
+	accentiLogicalATSID           = "/conf/accent-insensitive-comparison/logical"
+	basicSpatialTestDataATSID     = "/conf/basic-spatial-functions/test-data"
+	basicSpatialLogicalATSID      = "/conf/basic-spatial-functions/logical"
+	basicSpatialPlusTestDataATSID = "/conf/basic-spatial-functions-plus/test-data"
+	spatialTestDataATSID          = "/conf/spatial-functions/test-data"
+	spatialLogicalATSID           = "/conf/spatial-functions/logical"
 )
 
 //nolint:govet // Test evaluation records keep filter/query metadata before result payloads.
@@ -70,7 +75,12 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		accentiCaseiATSID,
 		accentiCaseiLikeATSID,
 		accentiTestDataATSID,
-		accentiLogicalATSID:
+		accentiLogicalATSID,
+		basicSpatialTestDataATSID,
+		basicSpatialLogicalATSID,
+		basicSpatialPlusTestDataATSID,
+		spatialTestDataATSID,
+		spatialLogicalATSID:
 		return true
 	default:
 		return false
@@ -306,7 +316,10 @@ func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
 	if s.current.ID != basicTestDataATSID &&
 		s.current.ID != advancedTestDataATSID &&
 		s.current.ID != caseiTestDataATSID &&
-		s.current.ID != accentiTestDataATSID {
+		s.current.ID != accentiTestDataATSID &&
+		s.current.ID != basicSpatialTestDataATSID &&
+		s.current.ID != basicSpatialPlusTestDataATSID &&
+		s.current.ID != spatialTestDataATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -483,6 +496,8 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 		return predicate.Conformance == ConformanceCaseInsensitiveComparison
 	case accentiTestDataATSID:
 		return predicate.Conformance == ConformanceAccentInsensitiveComparison
+	case basicSpatialTestDataATSID, basicSpatialPlusTestDataATSID, spatialTestDataATSID:
+		return predicate.Conformance == ConformanceSpatialFunctions
 	default:
 		return false
 	}
@@ -490,7 +505,12 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 
 func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
 	switch s.current.ID {
-	case basicLogicalATSID, advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID:
+	case basicLogicalATSID,
+		advancedLogicalATSID,
+		caseiLogicalATSID,
+		accentiLogicalATSID,
+		basicSpatialLogicalATSID,
+		spatialLogicalATSID:
 		return true
 	default:
 		return false
@@ -646,7 +666,7 @@ func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredic
 		switch atsID {
 		case basicLogicalATSID:
 			matched = (!p2 && p1) || (p3 && p4) || (!p1 && !p4)
-		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID:
+		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID:
 			matched = (!p1 && p2) || (p3 && !p4) || !p1 || !p4
 		}
 		if matched {
