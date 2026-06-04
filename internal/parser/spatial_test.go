@@ -23,7 +23,7 @@ func TestParseTextSpatialPredicates(t *testing.T) {
 		{input: `S_CONTAINS(geom,MULTIPOLYGON(((-180 -90,-90 -90,-90 90,-180 90,-180 -90))))`, op: api.SpatialOpContains},
 		{input: `S_OVERLAPS(geom,GEOMETRYCOLLECTION(POINT(7 50),POLYGON((0 0,10 0,10 10,0 10,0 0))))`, op: api.SpatialOpOverlaps},
 	}
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry})
 	for _, tc := range cases {
 		expr, err := parser.ParseText(tc.input)
 		if err != nil {
@@ -37,7 +37,7 @@ func TestParseTextSpatialPredicates(t *testing.T) {
 }
 
 func TestParseTextGeometryPreservesZCoordinates(t *testing.T) {
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry})
 	expr, err := parser.ParseText(`S_EQUALS(geom,LINESTRING(7 50 1,10 51 2))`)
 	if err != nil {
 		t.Fatalf("ParseText() error = %v", err)
@@ -80,10 +80,9 @@ func TestParseTextSpatialValidation(t *testing.T) {
 		`S_INTERSECTS(geom,BBOX(-180,-90,0,180,90))`:                             "exactly four or six numbers",
 		`S_INTERSECTS(geom,BBOX(-180,-90,100,180,90,0))`:                         "minimum elevation",
 	}
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(
-		api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry},
-		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-	))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry},
+		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString})
+
 	for input, want := range cases {
 		_, err := parser.ParseText(input)
 		assertParseErrorContains(t, err, want)
@@ -116,7 +115,7 @@ func TestParseJSONSpatialPredicates(t *testing.T) {
 		{input: `{"op":"s_contains","args":[{"property":"geom"},{"type":"MultiPolygon","coordinates":[[[[-180,-90],[-90,-90],[-90,90],[-180,90],[-180,-90]]]]}]}`, op: api.SpatialOpContains},
 		{input: `{"op":"s_overlaps","args":[{"property":"geom"},{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":[7,50]},{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,10],[0,0]]]}]}]}`, op: api.SpatialOpOverlaps},
 	}
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry})
 	for _, tc := range cases {
 		expr, err := parser.ParseJSON([]byte(tc.input))
 		if err != nil {
@@ -130,7 +129,7 @@ func TestParseJSONSpatialPredicates(t *testing.T) {
 }
 
 func TestParseJSONGeometryPreservesZCoordinates(t *testing.T) {
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry})
 	expr, err := parser.ParseJSON([]byte(`{"op":"s_equals","args":[{"property":"geom"},{"type":"LineString","coordinates":[[7,50,1],[10,51,2]]}]}`))
 	if err != nil {
 		t.Fatalf("ParseJSON() error = %v", err)
@@ -156,7 +155,7 @@ func TestParseJSONGeometryPreservesZCoordinates(t *testing.T) {
 }
 
 func TestParseJSONGeometryMatchesSchemaRules(t *testing.T) {
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry})
 
 	accepted := []string{
 		`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[7,50],"foreign":"ok"}]}`,
@@ -187,10 +186,8 @@ func TestParseJSONSpatialOpNamesAreCaseSensitive(t *testing.T) {
 		`{"op":"S_INTERSECTS","args":[{"property":"geom"},{"type":"Point","coordinates":[7,50]}]}`,
 		`{"op":"S_Intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[7,50]}]}`,
 	}
-	parser := NewParser(
-		WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}),
-		WithConformance(api.ConformanceSpatialFunctions),
-	)
+	parser := NewParser().WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}).WithConformance(api.ConformanceSpatialFunctions)
+
 	for _, input := range cases {
 		_, err := parser.ParseJSON([]byte(input))
 		assertParseErrorContains(t, err, "unsupported reserved operation")
@@ -208,10 +205,9 @@ func TestParseJSONGeoJSONValidation(t *testing.T) {
 		`{"op":"s_intersects","args":[{"property":"name"},{"type":"Point","coordinates":[7,50]}]}`:                               "cannot be used as a spatial operand",
 		`{"op":"s_intersects","args":[{"property":"geom"},"POINT(7 50)"]}`:                                                       "expected spatial operand",
 	}
-	parser := NewParser(WithConformance(api.ConformanceSpatialFunctions), WithAllowedProperties(
-		api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry},
-		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-	))
+	parser := NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry},
+		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString})
+
 	for input, want := range cases {
 		_, err := parser.ParseJSON([]byte(input))
 		assertParseErrorContains(t, err, want)

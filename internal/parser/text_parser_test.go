@@ -149,7 +149,7 @@ func TestParseTextParsesAdjacentArithmeticOperators(t *testing.T) {
 		{input: `1 + 1 = 2`, op: api.ArithmeticAdd},
 	}
 	for _, tc := range cases {
-		expr, err := ParseText(tc.input, WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty))
+		expr, err := NewParser().WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty).ParseText(tc.input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", tc.input, err)
 		}
@@ -172,7 +172,7 @@ func TestParseTextInLists(t *testing.T) {
 		`height IN (min_height + 1, max_height * 2)`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic))
+		expr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic).ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -181,10 +181,10 @@ func TestParseTextInLists(t *testing.T) {
 		}
 	}
 
-	_, err := ParseText(`status IN ()`, WithConformance(api.ConformanceAdvancedComparisonOperators))
+	_, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).ParseText(`status IN ()`)
 	assertParseErrorContains(t, err, "IN list must not be empty")
 
-	_, err = ParseText(`status IN ('ok', NULL)`, WithConformance(api.ConformanceAdvancedComparisonOperators))
+	_, err = NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).ParseText(`status IN ('ok', NULL)`)
 	assertParseErrorContains(t, err, "NULL is only allowed")
 }
 
@@ -199,13 +199,11 @@ func TestParseTextArrayPredicates(t *testing.T) {
 		{input: `A_EQUALS(tags, (1, 2 + count, TRUE))`, op: api.ArrayOpEquals},
 		{input: `A_OVERLAPS(get_tags(), (('nested'), status = 'new'))`, op: api.ArrayOpOverlaps},
 	}
-	parser := NewParser(
-		WithConformance(api.ConformanceArrayFunctions, api.ConformanceArithmetic),
-		WithAllowedFunctions(api.FunctionDefinition{
-			Name:    "get_tags",
-			Returns: []api.FunctionType{api.FunctionTypeArray},
-		}),
-	)
+	parser := NewParser().WithConformance(api.ConformanceArrayFunctions, api.ConformanceArithmetic).WithAllowedFunctions(api.FunctionDefinition{
+		Name:    "get_tags",
+		Returns: []api.FunctionType{api.FunctionTypeArray},
+	})
+
 	for _, tc := range cases {
 		expr, err := parser.ParseText(tc.input)
 		if err != nil {
@@ -220,39 +218,38 @@ func TestParseTextArrayPredicates(t *testing.T) {
 		}
 	}
 
-	_, err := ParseText(`A_CONTAINS(name, ('foo'))`, WithConformance(api.ConformanceArrayFunctions), WithAllowedProperties(
-		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-	))
+	_, err := NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString}).ParseText(`A_CONTAINS(name, ('foo'))`)
+
 	assertParseErrorContains(t, err, `cannot be used as an array operand`)
 
-	_, err = ParseText(`A_CONTAINS(tags, 'foo')`, WithConformance(api.ConformanceArrayFunctions))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).ParseText(`A_CONTAINS(tags, 'foo')`)
 	assertParseErrorContains(t, err, `expected array operand`)
 
-	_, err = ParseText(`A_CONTAINS(tags, name)`, WithConformance(api.ConformanceArrayFunctions), WithAllowedProperties(
-		api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
-		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-	))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
+		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString}).ParseText(`A_CONTAINS(tags, name)`)
+
 	assertParseErrorContains(t, err, `cannot be used as an array operand`)
 
-	_, err = ParseText(`A_CONTAINS`, WithConformance(api.ConformanceArrayFunctions))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).ParseText(`A_CONTAINS`)
 	assertParseErrorContains(t, err, `opening parenthesis`)
 
-	_, err = ParseText(`A_CONTAINS(tags ('foo'))`, WithConformance(api.ConformanceArrayFunctions))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).ParseText(`A_CONTAINS(tags ('foo'))`)
 	assertParseErrorContains(t, err, `function "tags" is not allowed`)
 
-	_, err = ParseText(`A_CONTAINS(tags, ('foo')`, WithConformance(api.ConformanceArrayFunctions))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).ParseText(`A_CONTAINS(tags, ('foo')`)
 	assertParseErrorContains(t, err, `closing parenthesis`)
 
-	_, err = ParseText(`A_CONTAINS(tags, )`, WithConformance(api.ConformanceArrayFunctions))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).ParseText(`A_CONTAINS(tags, )`)
 	assertParseErrorContains(t, err, `expected scalar expression`)
 
-	_, err = ParseText(`A_CONTAINS(tags, bad_fn())`, WithConformance(api.ConformanceArrayFunctions), WithAllowedFunctions(api.FunctionDefinition{
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedFunctions(api.FunctionDefinition{
 		Name:    "bad_fn",
 		Returns: []api.FunctionType{api.FunctionTypeString},
-	}))
+	}).ParseText(`A_CONTAINS(tags, bad_fn())`)
+
 	assertParseErrorContains(t, err, `does not return array`)
 
-	_, err = ParseText(`A_CONTAINS(tags, ((('foo'))))`, WithConformance(api.ConformanceArrayFunctions), WithMaxDepth(3))
+	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).WithMaxDepth(3).ParseText(`A_CONTAINS(tags, ((('foo'))))`)
 	assertParseErrorContains(t, err, `maximum parse depth exceeded`)
 }
 
@@ -264,7 +261,7 @@ func TestParseTextBetweenNumericExpressions(t *testing.T) {
 		`height NOT BETWEEN 1 AND limit`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic))
+		expr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic).ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -274,7 +271,7 @@ func TestParseTextBetweenNumericExpressions(t *testing.T) {
 	}
 
 	for _, input := range []string{`'x' BETWEEN 1 AND 2`, `height BETWEEN 'a' AND 2`} {
-		_, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators))
+		_, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).ParseText(input)
 		assertParseErrorContains(t, err, "numeric")
 	}
 }
@@ -287,7 +284,7 @@ func TestParseTextLikeLiteralPatterns(t *testing.T) {
 		`ACCENTI(name) LIKE ACCENTI('é%')`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators), WithAllowedFunctions(api.StandardTextFunctions()...))
+		expr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).WithAllowedFunctions(api.StandardTextFunctions()...).ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -297,7 +294,7 @@ func TestParseTextLikeLiteralPatterns(t *testing.T) {
 	}
 
 	for _, input := range []string{`name LIKE other`, `name LIKE custom('x')`, `1 LIKE 'x'`} {
-		_, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators))
+		_, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).ParseText(input)
 		assertParseErrorContains(t, err, "LIKE")
 	}
 }
@@ -311,7 +308,7 @@ func TestParseTextIsNullOperands(t *testing.T) {
 		`POINT(1 2) IS NULL`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input, WithConformance(api.ConformanceArithmetic))
+		expr, err := NewParser().WithConformance(api.ConformanceArithmetic).ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -330,7 +327,7 @@ func TestParseTextBooleanComparisons(t *testing.T) {
 		`TRUE <= archived`,
 	}
 	for _, input := range cases {
-		expr, err := ParseText(input, WithConformance(api.ConformancePropertyProperty))
+		expr, err := NewParser().WithConformance(api.ConformancePropertyProperty).ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -352,7 +349,7 @@ func TestParseTextPredicates(t *testing.T) {
 		{input: `CASEI(name) = CASEI('foo')`, want: &api.ComparisonExpression{}},
 	}
 	for _, tc := range cases {
-		expr, err := ParseText(tc.input, WithConformance(api.ConformanceAdvancedComparisonOperators), WithAllowedFunctions(api.StandardTextFunctions()...))
+		expr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).WithAllowedFunctions(api.StandardTextFunctions()...).ParseText(tc.input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", tc.input, err)
 		}
@@ -386,7 +383,7 @@ func TestParseTextPredicates(t *testing.T) {
 }
 
 func TestParseTextFunctionRegistry(t *testing.T) {
-	expr, err := ParseText(`ACCENTI(CASEI(name)) = accenti(casei('ÄÉ'))`, WithAllowedFunctions(api.CaseIFunction(), api.AccentiFunction()))
+	expr, err := NewParser().WithAllowedFunctions(api.CaseIFunction(), api.AccentiFunction()).ParseText(`ACCENTI(CASEI(name)) = accenti(casei('ÄÉ'))`)
 	if err != nil {
 		t.Fatalf("ParseText registered standard text functions: %v", err)
 	}
@@ -397,10 +394,10 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 	_, err = ParseText(`custom(name, 1)`)
 	assertParseErrorContains(t, err, `function "custom" is not allowed`)
 
-	_, err = ParseText(`CASEI(1) = '1'`, WithAllowedFunctions(api.CaseIFunction()))
+	_, err = NewParser().WithAllowedFunctions(api.CaseIFunction()).ParseText(`CASEI(1) = '1'`)
 	assertParseErrorContains(t, err, `expected string`)
 
-	_, err = ParseText(`CASEI(name)`, WithAllowedFunctions(api.CaseIFunction()))
+	_, err = NewParser().WithAllowedFunctions(api.CaseIFunction()).ParseText(`CASEI(name)`)
 	assertParseErrorContains(t, err, `expected predicate operator`)
 
 	boolFn := api.FunctionDefinition{
@@ -411,7 +408,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
 	}
-	expr, err = ParseText(`contains_any(name, 'a', 'b')`, WithAllowedFunctions(boolFn))
+	expr, err = NewParser().WithAllowedFunctions(boolFn).ParseText(`contains_any(name, 'a', 'b')`)
 	if err != nil {
 		t.Fatalf("ParseText registered variadic function: %v", err)
 	}
@@ -420,7 +417,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		t.Fatalf("expr = %#v, want registered boolean function", expr)
 	}
 
-	_, err = ParseText(`contains_any(name, 1)`, WithAllowedFunctions(boolFn))
+	_, err = NewParser().WithAllowedFunctions(boolFn).ParseText(`contains_any(name, 1)`)
 	assertParseErrorContains(t, err, `expected string`)
 
 	groupedBoolFn := api.FunctionDefinition{
@@ -428,7 +425,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		Args:    []api.FunctionArgument{{Name: "value", Types: []api.FunctionType{api.FunctionTypeBoolean}}},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
 	}
-	expr, err = ParseText(`accept_bool((a = 1))`, WithAllowedFunctions(groupedBoolFn))
+	expr, err = NewParser().WithAllowedFunctions(groupedBoolFn).ParseText(`accept_bool((a = 1))`)
 	if err != nil {
 		t.Fatalf("ParseText grouped boolean function argument: %v", err)
 	}
@@ -445,7 +442,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		Args:    []api.FunctionArgument{{Name: "value", Types: []api.FunctionType{api.FunctionTypeArray}}},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
 	}
-	expr, err = ParseText(`accept_array(('a', 'b'))`, WithAllowedFunctions(arrayFn))
+	expr, err = NewParser().WithAllowedFunctions(arrayFn).ParseText(`accept_array(('a', 'b'))`)
 	if err != nil {
 		t.Fatalf("ParseText array function argument: %v", err)
 	}
@@ -466,13 +463,13 @@ func TestParseTextRejectsInvalidOperandShapes(t *testing.T) {
 		`x = NULL`:                   "NULL is only allowed in IS NULL predicates",
 	}
 	for input, want := range cases {
-		_, err := ParseText(input, WithConformance(api.ConformanceAdvancedComparisonOperators))
+		_, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).ParseText(input)
 		assertParseErrorContains(t, err, want)
 	}
 }
 
 func TestParseTextArithmetic(t *testing.T) {
-	expr, err := ParseText(`(a + 1) * 2 >= b DIV -c`, WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty))
+	expr, err := NewParser().WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty).ParseText(`(a + 1) * 2 >= b DIV -c`)
 	if err != nil {
 		t.Fatalf("ParseText arithmetic: %v", err)
 	}
@@ -497,11 +494,11 @@ func TestParseTextArithmetic(t *testing.T) {
 		t.Fatalf("right.Right = %#v, want unary minus", right.Right)
 	}
 
-	_, err = ParseText(`'x' + 1 = 2`, WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty))
+	_, err = NewParser().WithConformance(api.ConformanceArithmetic, api.ConformancePropertyProperty).ParseText(`'x' + 1 = 2`)
 	assertParseErrorContains(t, err, "arithmetic operands must be numeric expressions")
 }
 
 func TestParseTextDepthLimit(t *testing.T) {
-	_, err := ParseText(`NOT NOT NOT a = 1`, WithMaxDepth(2))
+	_, err := NewParser().WithMaxDepth(2).ParseText(`NOT NOT NOT a = 1`)
 	assertParseErrorContains(t, err, "maximum parse depth exceeded")
 }

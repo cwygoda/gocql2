@@ -60,19 +60,16 @@ func TestPostGISDialectWithTestcontainers(t *testing.T) {
 	}
 
 	props := atsFixturePostGISSQLProperties()
-	parseOpts := []gocql2.ParseOption{
-		gocql2.WithConformance(
-			api.ConformanceAdvancedComparisonOperators,
-			api.ConformanceCaseInsensitiveComparison,
-			api.ConformanceAccentInsensitiveComparison,
-			api.ConformanceArithmetic,
-			api.ConformanceTemporalFunctions,
-			api.ConformanceArrayFunctions,
-			api.ConformanceSpatialFunctions,
-			api.ConformancePropertyProperty,
-		),
-		gocql2.WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...),
-	}
+	parser := gocql2.NewParser().WithConformance(
+		api.ConformanceAdvancedComparisonOperators,
+		api.ConformanceCaseInsensitiveComparison,
+		api.ConformanceAccentInsensitiveComparison,
+		api.ConformanceArithmetic,
+		api.ConformanceTemporalFunctions,
+		api.ConformanceArrayFunctions,
+		api.ConformanceSpatialFunctions,
+		api.ConformancePropertyProperty,
+	).WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...)
 	sqlOpts := []cql2sql.Option{cql2sql.WithSQLProperties(props...)}
 
 	tests := []struct {
@@ -97,7 +94,7 @@ func TestPostGISDialectWithTestcontainers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ids, err := postGISQueryIDs(ctx, db, tt.cql, parseOpts, sqlOpts)
+			ids, err := postGISQueryIDs(ctx, db, tt.cql, parser, sqlOpts)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -198,8 +195,8 @@ func postGISTextArrayLiteral(items []string) string {
 	return `{` + strings.Join(quoted, `,`) + `}`
 }
 
-func postGISQueryIDs(ctx context.Context, db *sql.DB, filter string, parseOpts []gocql2.ParseOption, sqlOpts []cql2sql.Option) ([]string, error) {
-	expr, err := gocql2.ParseText(filter, parseOpts...)
+func postGISQueryIDs(ctx context.Context, db *sql.DB, filter string, parser *gocql2.Parser, sqlOpts []cql2sql.Option) ([]string, error) {
+	expr, err := parser.ParseText(filter)
 	if err != nil {
 		return nil, err
 	}

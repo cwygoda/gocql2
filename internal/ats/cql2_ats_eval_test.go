@@ -751,7 +751,7 @@ func (s *cql2ATSSuite) evaluateATSFixtureFilter(filter string) ([]string, error)
 	if s.atsDB == nil {
 		return nil, fmt.Errorf("ATS PostGIS fixture is not initialized")
 	}
-	return postGISQueryIDs(context.Background(), s.atsDB, filter, s.atsParseOpts, s.atsSQLOpts)
+	return postGISQueryIDs(context.Background(), s.atsDB, filter, s.atsParser, s.atsSQLOpts)
 }
 
 func atsComparisonLiteralForType(typ api.PropertyType) string {

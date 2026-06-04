@@ -47,7 +47,7 @@ type cql2ATSSuite struct {
 	atsEvaluations      []atsEvaluation
 	storedATSPredicates []atsStoredPredicate
 	atsDB               *sql.DB
-	atsParseOpts        []gocql2.ParseOption
+	atsParser           *gocql2.Parser
 	atsSQLOpts          []cql2sql.Option
 }
 
@@ -62,19 +62,16 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 	props := atsFixturePostGISSQLProperties()
 	suiteState := &cql2ATSSuite{
 		atsDB: db,
-		atsParseOpts: []gocql2.ParseOption{
-			gocql2.WithConformance(
-				api.ConformanceAdvancedComparisonOperators,
-				api.ConformanceCaseInsensitiveComparison,
-				api.ConformanceAccentInsensitiveComparison,
-				api.ConformanceArithmetic,
-				api.ConformanceTemporalFunctions,
-				api.ConformanceArrayFunctions,
-				api.ConformanceSpatialFunctions,
-				api.ConformancePropertyProperty,
-			),
-			gocql2.WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...),
-		},
+		atsParser: gocql2.NewParser().WithConformance(
+			api.ConformanceAdvancedComparisonOperators,
+			api.ConformanceCaseInsensitiveComparison,
+			api.ConformanceAccentInsensitiveComparison,
+			api.ConformanceArithmetic,
+			api.ConformanceTemporalFunctions,
+			api.ConformanceArrayFunctions,
+			api.ConformanceSpatialFunctions,
+			api.ConformancePropertyProperty,
+		).WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...),
 		atsSQLOpts: []cql2sql.Option{cql2sql.WithSQLProperties(props...)},
 	}
 
@@ -349,15 +346,10 @@ func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "tags")
-	s.parsed, s.parseErr = gocql2.ParseText(
-		filter,
-		gocql2.WithConformance(api.ConformanceArrayFunctions),
-		gocql2.WithAllowedProperties(
-			api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
-			api.PropertyDefinition{Name: "foo", Type: api.PropertyTypeString},
-			api.PropertyDefinition{Name: "bar", Type: api.PropertyTypeString},
-		),
-	)
+	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
+		api.PropertyDefinition{Name: "foo", Type: api.PropertyTypeString},
+		api.PropertyDefinition{Name: "bar", Type: api.PropertyTypeString}).ParseText(filter)
+
 	return s.parseErr
 }
 
@@ -381,13 +373,8 @@ func (s *cql2ATSSuite) iEvaluateTheSpatialPredicateTemplate(filter string) error
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "geom")
-	s.parsed, s.parseErr = gocql2.ParseText(
-		filter,
-		gocql2.WithConformance(api.ConformanceSpatialFunctions),
-		gocql2.WithAllowedProperties(
-			api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry},
-		),
-	)
+	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}).ParseText(filter)
+
 	s.spatialFilters = append(s.spatialFilters, filter)
 	s.spatialParseErrs = append(s.spatialParseErrs, s.parseErr)
 	return nil
@@ -415,15 +402,10 @@ func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(filter string) erro
 	filter = strings.ReplaceAll(filter, "{queryable1}", "start_time")
 	filter = strings.ReplaceAll(filter, "{queryable2}", "end_time")
 	filter = strings.ReplaceAll(filter, "{queryable}", "event_time")
-	s.parsed, s.parseErr = gocql2.ParseText(
-		filter,
-		gocql2.WithConformance(api.ConformanceTemporalFunctions),
-		gocql2.WithAllowedProperties(
-			api.PropertyDefinition{Name: "event_time", Type: api.PropertyTypeAny},
-			api.PropertyDefinition{Name: "start_time", Type: api.PropertyTypeAny},
-			api.PropertyDefinition{Name: "end_time", Type: api.PropertyTypeAny},
-		),
-	)
+	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceTemporalFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "event_time", Type: api.PropertyTypeAny},
+		api.PropertyDefinition{Name: "start_time", Type: api.PropertyTypeAny},
+		api.PropertyDefinition{Name: "end_time", Type: api.PropertyTypeAny}).ParseText(filter)
+
 	return s.parseErr
 }
 
