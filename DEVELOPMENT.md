@@ -1,6 +1,6 @@
 # gocql2 - OGC CQL2 parser with SQL generation
 
-[![codecov](https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4)](https://codecov.io/github/cwygoda/gocql2)
+[![codecov][codecov-badge]][codecov]
 
 ## Dev 101
 
@@ -31,6 +31,8 @@ When committing, [lefthook] managed git hooks are run (see [.lefthook.yml](./.le
 check the code and commit message, which has to use [conventional commits] style (checked using
 [cocogitto]).
 
+[codecov]: https://codecov.io/github/cwygoda/gocql2
+[codecov-badge]: https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4
 [actionlint]: https://github.com/rhysd/actionlint
 [cocogitto]: https://docs.cocogitto.io
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/

@@ -1,10 +1,13 @@
 # gocql2 - OGC CQL2 parser with SQL generation
 
-[![codecov](https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4)](https://codecov.io/github/cwygoda/gocql2)
+[![codecov][codecov-badge]][codecov]
 
-gocql2 is a Go library for parsing [OGC Common Query Language 2 (CQL2)][cql2] filters and, when needed, compiling them into safe parameterized SQL fragments.
+gocql2 is a Go library for parsing [OGC Common Query Language 2 (CQL2)][cql2]
+filters and, when needed, compiling them into safe parameterized SQL fragments.
 
-Use it when you accept CQL2 from API clients, such as OGC API Features `filter` parameters, and need to validate the filter against your queryable fields before applying it to a datastore.
+Use it when you accept CQL2 from API clients, such as OGC API Features `filter`
+parameters, and need to validate the filter against your queryable fields before applying it to a
+datastore.
 
 ## Install
 
@@ -21,12 +24,12 @@ import (
     "fmt"
     "log"
 
-    "github.com/cwygoda/cql2"
+    gocql2 "github.com/cwygoda/cql2"
     "github.com/cwygoda/cql2/api"
 )
 
 func main() {
-    expr, err := cql2.NewParser().
+    expr, err := gocql2.NewParser().
         WithAllowedProperties(
             api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
             api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
@@ -40,12 +43,13 @@ func main() {
 }
 ```
 
-For one-off parsing without schema validation, use `gocql2.ParseText`, `gocql2.ParseJSON`, or `gocql2.Parse`.
+For one-off parsing without schema validation, use `gocql2.ParseText`, `gocql2.ParseJSON`, or
+`gocql2.Parse`.
 
 ## Parse CQL2 JSON
 
 ```go
-expr, err := cql2.NewParser().
+expr, err := gocql2.NewParser().
     WithAllowedProperties(
         api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
         api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
@@ -61,7 +65,9 @@ expr, err := cql2.NewParser().
 
 ## Compile CQL2 to SQL
 
-The `sql` package turns a parsed AST into a parameterized SQL expression. Property mappings are fail-closed by default: every CQL2 property must be explicitly mapped to trusted application-authored SQL.
+The `sql` package turns a parsed AST into a parameterized SQL expression. Property mappings are
+fail-closed by default: every CQL2 property must be explicitly mapped to trusted
+application-authored SQL.
 
 ```go
 package main
@@ -70,18 +76,18 @@ import (
     "fmt"
     "log"
 
-    "github.com/cwygoda/cql2"
+    gocql2 "github.com/cwygoda/cql2"
     "github.com/cwygoda/cql2/api"
-    "github.com/cwygoda/cql2/sql"
+    cql2sql "github.com/cwygoda/cql2/sql"
 )
 
 func main() {
-    props := []sql.Property{
-        {Name: "name", Type: api.PropertyTypeString, Expr: sql.Column("assets", "name")},
-        {Name: "height", Type: api.PropertyTypeNumber, Expr: sql.Column("assets", "height")},
+    props := []cql2sql.Property{
+        {Name: "name", Type: api.PropertyTypeString, Expr: cql2sql.Column("assets", "name")},
+        {Name: "height", Type: api.PropertyTypeNumber, Expr: cql2sql.Column("assets", "height")},
     }
 
-    expr, err := cql2.NewParser().
+    expr, err := gocql2.NewParser().
         WithConformance(
             api.ConformanceAdvancedComparisonOperators,
             api.ConformanceCaseInsensitiveComparison,
@@ -92,10 +98,10 @@ func main() {
         log.Fatal(err)
     }
 
-    where, err := sql.ToSQL(
+    where, err := cql2sql.ToSQL(
         expr,
-        sql.PostGISDialect(),
-        sql.WithSQLProperties(props...),
+        cql2sql.PostGISDialect(),
+        cql2sql.WithSQLProperties(props...),
     )
     if err != nil {
         log.Fatal(err)
@@ -119,47 +125,60 @@ You can then compose `where.Text` into your query and pass `where.Args` to your 
 
 A reusable parser can be configured before concurrent use:
 
-- `WithAllowedProperties` rejects unknown properties and validates property types in scalar, comparison, temporal, spatial, array, and function contexts.
+- `WithAllowedProperties` rejects unknown properties and validates property types in scalar,
+  comparison, temporal, spatial, array, and function contexts.
 - `WithSupportedProperties` advertises a property allow-list without type validation.
 - `WithAllowedFunctions` rejects unknown functions and validates function signatures.
 - `WithSupportedFunctions` advertises function names without signature validation.
-- `WithConformance` records CQL2 conformance classes and enables standard CQL2 functions implied by those classes, such as `CASEI`, spatial predicates, temporal predicates, and array predicates.
+- `WithConformance` records CQL2 conformance classes and enables standard CQL2 functions implied
+  by those classes, such as `CASEI`, spatial predicates, temporal predicates, and array predicates.
 - `WithMaxDepth` limits recursive parse depth for defensive parsing.
 
 ## SQL dialects
 
 gocql2 includes:
 
-- `sql.BaseDialect` for ANSI-style placeholders and identifier quoting.
-- `sql.PostGISDialect` for PostgreSQL/PostGIS placeholders, case/accent functions, spatial predicates, temporal predicates, array predicates, and geometry literals.
+- `cql2sql.BaseDialect` for ANSI-style placeholders and identifier quoting.
+- `cql2sql.PostGISDialect` for PostgreSQL/PostGIS placeholders, case/accent functions, spatial
+  predicates, temporal predicates, array predicates, and geometry literals.
 
-Implement `sql.Dialect` or embed `sql.BaseDialect` to customize database-specific rendering.
+Implement `cql2sql.Dialect` or embed `cql2sql.BaseDialect` to customize database-specific
+rendering.
 
 ## Error handling
 
-Parser errors are returned as `*api.ParseError` and include source language plus either text position or JSON path information.
+Parser errors are returned as `*api.ParseError` and include source language plus either text
+position or JSON path information.
 
 ```go
-expr, err := gocql2.ParseText("name =")
+_, err := gocql2.ParseText("name =")
 if err != nil {
     var parseErr *api.ParseError
     if errors.As(err, &parseErr) {
-        log.Printf("bad CQL2 at line %d, column %d", parseErr.Location.Line, parseErr.Location.Column)
+        log.Printf(
+            "bad CQL2 at line %d, column %d",
+            parseErr.Location.Line,
+            parseErr.Location.Column,
+        )
     }
 }
-_ = expr
 ```
 
-SQL generation errors are regular Go errors, for example when a property has no SQL mapping or a dialect does not support a requested function.
+SQL generation errors are regular Go errors, for example when a property has no SQL mapping or a
+dialect does not support a requested function.
 
 ## Supported input and features
 
 - CQL2 Text and CQL2 JSON parsing.
-- Logical expressions, comparisons, `LIKE`, `BETWEEN`, `IN`, `IS NULL`, arithmetic, and boolean/null/string/number literals.
+- Logical expressions, comparisons, `LIKE`, `BETWEEN`, `IN`, `IS NULL`, arithmetic, and
+  boolean/null/string/number literals.
 - Standard CQL2 spatial, temporal, and array predicates when enabled by conformance.
 - Typed public AST in the `api` package.
 - Parameterized SQL fragment generation with explicit property mapping.
 
-See [REFERENCES.md](./REFERENCES.md) for CQL2 references and [DEVELOPMENT.md](./DEVELOPMENT.md) for contributor setup.
+See [REFERENCES.md](./REFERENCES.md) for CQL2 references and [DEVELOPMENT.md](./DEVELOPMENT.md)
+for contributor setup.
 
+[codecov]: https://codecov.io/github/cwygoda/gocql2
+[codecov-badge]: https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4
 [cql2]: https://docs.ogc.org/is/21-065r2/21-065r2.html
