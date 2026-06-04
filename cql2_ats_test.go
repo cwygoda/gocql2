@@ -205,6 +205,7 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^assert that the expected result is returned\.$`, s.assertExpectedATSResultsReturned)
 	ctx.Step(`^assert that the two result sets for each queryable for the operators (=|>|<) and (<>|<=|>=) have no item in common;$`, s.assertOperatorResultSetsDisjoint)
 	ctx.Step(`^assert that the two result sets for each queryable have no item in common;$`, s.assertPairedResultSetsDisjoint)
+	ctx.Step(`^assert that the two result sets for each queryable are identical;$`, s.assertPairedResultSetsIdentical)
 	ctx.Step(`^assert that the result sets for false are empty;$`, s.assertFalseResultSetsEmpty)
 	ctx.Step(`^assert that the two result sets for each queryable for the pattern expression '([^']*)' and '([^']*)' have no item in common;$`, s.assertPatternResultSetsDisjoint)
 	ctx.Step(`^assert that the two result sets for each queryable for the pattern expression '([^']*)' and '([^']*)' are identical;$`, s.assertPatternResultSetsIdentical)

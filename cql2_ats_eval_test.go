@@ -21,6 +21,16 @@ const (
 	advancedInATSID       = "/conf/advanced-comparison-operators/in"
 	advancedTestDataATSID = "/conf/advanced-comparison-operators/test-data"
 	advancedLogicalATSID  = "/conf/advanced-comparison-operators/logical"
+	caseiATSID            = "/conf/case-insensitive-comparison/casei"
+	caseiLikeATSID        = "/conf/case-insensitive-comparison/casei-like"
+	caseiTestDataATSID    = "/conf/case-insensitive-comparison/test-data"
+	caseiLogicalATSID     = "/conf/case-insensitive-comparison/logical"
+	accentiATSID          = "/conf/accent-insensitive-comparison/accenti"
+	accentiLikeATSID      = "/conf/accent-insensitive-comparison/accenti-like"
+	accentiCaseiATSID     = "/conf/accent-insensitive-comparison/accenti-casei"
+	accentiCaseiLikeATSID = "/conf/accent-insensitive-comparison/accenti-casei-like"
+	accentiTestDataATSID  = "/conf/accent-insensitive-comparison/test-data"
+	accentiLogicalATSID   = "/conf/accent-insensitive-comparison/logical"
 )
 
 //nolint:govet // Test evaluation records keep filter/query metadata before result payloads.
@@ -50,7 +60,17 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		advancedBetweenATSID,
 		advancedInATSID,
 		advancedTestDataATSID,
-		advancedLogicalATSID:
+		advancedLogicalATSID,
+		caseiATSID,
+		caseiLikeATSID,
+		caseiTestDataATSID,
+		caseiLogicalATSID,
+		accentiATSID,
+		accentiLikeATSID,
+		accentiCaseiATSID,
+		accentiCaseiLikeATSID,
+		accentiTestDataATSID,
+		accentiLogicalATSID:
 		return true
 	default:
 		return false
@@ -171,11 +191,25 @@ func (s *cql2ATSSuite) forEachDataSourceEvaluateFilters() error {
 }
 
 func (s *cql2ATSSuite) forEachStringQueryableEvaluateFilters() error {
-	if s.current.ID != advancedLikeATSID {
+	if s.current.ID != advancedLikeATSID && !s.isInsensitiveStringPredicateATS() {
 		return nil
 	}
 	s.executedByStep = true
 	return nil
+}
+
+func (s *cql2ATSSuite) isInsensitiveStringPredicateATS() bool {
+	switch s.current.ID {
+	case caseiATSID,
+		caseiLikeATSID,
+		accentiATSID,
+		accentiLikeATSID,
+		accentiCaseiATSID,
+		accentiCaseiLikeATSID:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *cql2ATSSuite) forEachNumericQueryableEvaluateFilters() error {
@@ -229,7 +263,7 @@ func (s *cql2ATSSuite) evaluateStringPredicateTemplate(template string) error {
 	if !s.isImplementedScalarATS() {
 		return s.unimplementedATSFixtureStep()
 	}
-	if s.current.ID != advancedLikeATSID {
+	if s.current.ID != advancedLikeATSID && !s.isInsensitiveStringPredicateATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -269,7 +303,10 @@ func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
 	if !s.isImplementedScalarATS() {
 		return s.unimplementedATSFixtureStep()
 	}
-	if s.current.ID != basicTestDataATSID && s.current.ID != advancedTestDataATSID {
+	if s.current.ID != basicTestDataATSID &&
+		s.current.ID != advancedTestDataATSID &&
+		s.current.ID != caseiTestDataATSID &&
+		s.current.ID != accentiTestDataATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -290,7 +327,7 @@ func (s *cql2ATSSuite) evaluateStoredPredicateCombinations() error {
 }
 
 func (s *cql2ATSSuite) evaluateSpecificStoredPredicateCombination(template string) error {
-	if s.current.ID != basicLogicalATSID && s.current.ID != advancedLogicalATSID {
+	if !s.isLogicalCombinationATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -347,11 +384,23 @@ func (s *cql2ATSSuite) assertOperatorResultSetsDisjoint(left, right string) erro
 }
 
 func (s *cql2ATSSuite) assertPairedResultSetsDisjoint() error {
-	if s.current.ID != basicIsNullATSID {
+	if s.current.ID == basicIsNullATSID {
+		s.executedByStep = true
+		return s.assertEvaluationsByQueryablePair("is null", "is not null", atsAssertDisjoint)
+	}
+	if s.isInsensitiveStringPredicateATS() {
+		s.executedByStep = true
+		return s.assertFirstTwoEvaluationsByQueryable(atsAssertDisjoint)
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) assertPairedResultSetsIdentical() error {
+	if !s.isInsensitiveStringPredicateATS() {
 		return nil
 	}
 	s.executedByStep = true
-	return s.assertEvaluationsByQueryablePair("is null", "is not null", atsAssertDisjoint)
+	return s.assertFirstTwoEvaluationsByQueryable(atsAssertIdentical)
 }
 
 func (s *cql2ATSSuite) assertFalseResultSetsEmpty() error {
@@ -430,9 +479,38 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 		return predicate.Conformance == ConformanceBasicCQL2
 	case advancedTestDataATSID:
 		return predicate.Conformance == ConformanceAdvancedComparisonOperators
+	case caseiTestDataATSID:
+		return predicate.Conformance == ConformanceCaseInsensitiveComparison
+	case accentiTestDataATSID:
+		return predicate.Conformance == ConformanceAccentInsensitiveComparison
 	default:
 		return false
 	}
+}
+
+func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
+	switch s.current.ID {
+	case basicLogicalATSID, advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *cql2ATSSuite) assertFirstTwoEvaluationsByQueryable(assert func([]string, []string) error) error {
+	byQueryable := map[string][]atsEvaluation{}
+	for _, evaluation := range s.atsEvaluations {
+		byQueryable[evaluation.Queryable] = append(byQueryable[evaluation.Queryable], evaluation)
+	}
+	for queryable, evaluations := range byQueryable {
+		if len(evaluations) < 2 {
+			return fmt.Errorf("queryable %q has %d evaluations, want at least two", queryable, len(evaluations))
+		}
+		if err := assert(evaluations[0].IDs, evaluations[1].IDs); err != nil {
+			return fmt.Errorf("queryable %q first two result sets: %w", queryable, err)
+		}
+	}
+	return nil
 }
 
 func (s *cql2ATSSuite) assertEvaluationsByQueryablePair(leftKey, rightKey string, assert func([]string, []string) error) error {
@@ -568,7 +646,7 @@ func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredic
 		switch atsID {
 		case basicLogicalATSID:
 			matched = (!p2 && p1) || (p3 && p4) || (!p1 && !p4)
-		case advancedLogicalATSID:
+		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID:
 			matched = (!p1 && p2) || (p3 && !p4) || !p1 || !p4
 		}
 		if matched {
