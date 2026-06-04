@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,14 +53,7 @@ func TestPostGISDialectWithTestcontainers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	props := []SQLProperty{
-		{Name: "name", Type: PropertyTypeString, Expr: Column("name")},
-		{Name: "height", Type: PropertyTypeNumber, Expr: RawSQL("(properties->>'height')::numeric")},
-		{Name: "active", Type: PropertyTypeBoolean, Expr: Column("active")},
-		{Name: "event_time", Type: PropertyTypeTimestamp, Expr: Column("event_time")},
-		{Name: "tags", Type: PropertyTypeArray, Expr: Column("tags")},
-		{Name: "geom", Type: PropertyTypeGeometry, Expr: Column("geom")},
-	}
+	props := atsFixturePostGISSQLProperties()
 	parseOpts := []ParseOption{
 		WithConformance(
 			ConformanceAdvancedComparisonOperators,
@@ -68,6 +63,7 @@ func TestPostGISDialectWithTestcontainers(t *testing.T) {
 			ConformanceTemporalFunctions,
 			ConformanceArrayFunctions,
 			ConformanceSpatialFunctions,
+			ConformancePropertyProperty,
 		),
 		WithAllowedProperties(SQLPropertyDefinitions(props...)...),
 	}
@@ -78,13 +74,20 @@ func TestPostGISDialectWithTestcontainers(t *testing.T) {
 		cql  string
 		want []string
 	}{
-		{name: "json alias and arithmetic", cql: "height + 1 > 11", want: []string{"b", "c"}},
-		{name: "case insensitive", cql: "CASEI(name) = casei('CAFE')", want: []string{"b"}},
-		{name: "accent insensitive", cql: "ACCENTI(CASEI(name)) = accenti(casei('cafe'))", want: []string{"a", "b"}},
-		{name: "array overlap", cql: "A_OVERLAPS(tags, ('blue'))", want: []string{"a", "c"}},
-		{name: "temporal after", cql: "T_AFTER(event_time, TIMESTAMP('2022-01-01T00:00:00Z'))", want: []string{"b", "c"}},
-		{name: "spatial bbox", cql: "S_INTERSECTS(geom, BBOX(-1,-1,1,1))", want: []string{"a"}},
-		{name: "geometry literal", cql: "S_INTERSECTS(geom, POINT(10 10))", want: []string{"b"}},
+		{name: "arithmetic over integer queryable", cql: "population / 1000000 >= 10", want: []string{"istanbul", "sao_paulo"}},
+		{name: "case insensitive", cql: "CASEI(name_ascii) = casei('munich')", want: []string{"munich"}},
+		{name: "accent insensitive", cql: "ACCENTI(name) = accenti('Lodz')", want: []string{"lodz"}},
+		{name: "array overlap", cql: "A_OVERLAPS(tags, ('port','capital'))", want: []string{"a_coruna", "alesund", "bogota", "istanbul", "luxembourg", "montreal"}},
+		{name: "temporal after", cql: "T_AFTER(last_updated, TIMESTAMP('2024-03-01T00:00:00Z'))", want: []string{"a_coruna", "alesund", "bogota", "istanbul", "luxembourg", "montreal"}},
+		{name: "spatial bbox", cql: "S_INTERSECTS(geom, BBOX(5,47,12,52))", want: []string{"luxembourg", "munich", "zurich"}},
+		{name: "geometry literal", cql: "S_INTERSECTS(geom, POINT(6.1319 49.6116))", want: []string{"luxembourg"}},
+	}
+	for _, predicate := range atsFixture.Predicates {
+		tests = append(tests, struct {
+			name string
+			cql  string
+			want []string
+		}{name: "ATS fixture predicate " + predicate.Filter, cql: predicate.Filter, want: predicate.WantIDs})
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -103,26 +106,90 @@ func setupPostGISFixture(ctx context.Context, db *sql.DB) error {
 	statements := []string{
 		`CREATE EXTENSION IF NOT EXISTS postgis`,
 		`CREATE EXTENSION IF NOT EXISTS unaccent`,
+		`DROP TABLE IF EXISTS features`,
 		`CREATE TABLE features (
 			id text PRIMARY KEY,
 			name text,
-			active boolean,
-			event_time timestamptz,
-			tags text[],
-			geom geometry(Geometry, 4326),
-			properties jsonb
+			name_ascii text,
+			country text,
+			capital boolean,
+			population integer,
+			elevation_m numeric,
+			founded_date date,
+			last_updated timestamptz,
+			record_start timestamptz,
+			record_end timestamptz,
+			source_start date,
+			source_end date,
+			geom geometry(Point, 4326),
+			tags text[]
 		)`,
-		`INSERT INTO features (id, name, active, event_time, tags, geom, properties) VALUES
-			('a', 'Café', true,  '2021-06-01T00:00:00Z', ARRAY['red','blue'],   ST_SetSRID(ST_Point(0, 0), 4326),  '{"height": 10}'),
-			('b', 'CAFE', false, '2022-06-01T00:00:00Z', ARRAY['green'],      ST_SetSRID(ST_Point(10, 10), 4326), '{"height": 12}'),
-			('c', 'Tea',  true,  '2023-06-01T00:00:00Z', ARRAY['blue'],       ST_SetSRID(ST_Point(50, 50), 4326), '{"height": 20}')`,
 	}
 	for _, statement := range statements {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			return err
 		}
 	}
+
+	const insertSQL = `INSERT INTO features (
+		id, name, name_ascii, country, capital, population, elevation_m,
+		founded_date, last_updated, record_start, record_end, source_start, source_end, geom, tags
+	) VALUES (
+		$1, $2, $3, $4, $5, $6, $7,
+		$8::date, $9::timestamptz, $10::timestamptz, $11::timestamptz, $12::date, $13::date,
+		ST_SetSRID(ST_Point($14, $15), 4326), $16::text[]
+	)`
+	for _, row := range atsFixture.Rows {
+		point, ok := row.Values["geom"].(atsPoint)
+		if !ok {
+			return fmt.Errorf("ATS fixture row %q has geom %T, want atsPoint", row.ID, row.Values["geom"])
+		}
+		tags, ok := row.Values["tags"].([]string)
+		if !ok {
+			return fmt.Errorf("ATS fixture row %q has tags %T, want []string", row.ID, row.Values["tags"])
+		}
+		_, err := db.ExecContext(
+			ctx,
+			insertSQL,
+			row.ID,
+			row.Values["name"],
+			row.Values["name_ascii"],
+			row.Values["country"],
+			row.Values["capital"],
+			row.Values["population"],
+			row.Values["elevation_m"],
+			row.Values["founded_date"],
+			row.Values["last_updated"],
+			row.Values["record_start"],
+			row.Values["record_end"],
+			row.Values["source_start"],
+			row.Values["source_end"],
+			point.Lon,
+			point.Lat,
+			postGISTextArrayLiteral(tags),
+		)
+		if err != nil {
+			return fmt.Errorf("insert ATS fixture row %q: %w", row.ID, err)
+		}
+	}
 	return nil
+}
+
+func atsFixturePostGISSQLProperties() []SQLProperty {
+	props := make([]SQLProperty, 0, len(atsFixture.Queryables))
+	for _, queryable := range atsFixture.Queryables {
+		props = append(props, SQLProperty{Name: queryable.Name, Type: queryable.Type, Expr: Column(queryable.Name)})
+	}
+	return props
+}
+
+func postGISTextArrayLiteral(items []string) string {
+	quoted := make([]string, len(items))
+	replacer := strings.NewReplacer(`\\`, `\\\\`, `"`, `\\"`)
+	for i, item := range items {
+		quoted[i] = `"` + replacer.Replace(item) + `"`
+	}
+	return `{` + strings.Join(quoted, `,`) + `}`
 }
 
 func postGISQueryIDs(ctx context.Context, db *sql.DB, filter string, parseOpts []ParseOption, sqlOpts []SQLOption) ([]string, error) {
