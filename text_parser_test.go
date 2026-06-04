@@ -322,6 +322,8 @@ func TestParseTextBooleanComparisons(t *testing.T) {
 		`active = TRUE`,
 		`FALSE <> archived`,
 		`TRUE = FALSE`,
+		`active > FALSE`,
+		`TRUE <= archived`,
 	}
 	for _, input := range cases {
 		expr, err := ParseText(input, WithConformance(ConformancePropertyProperty))

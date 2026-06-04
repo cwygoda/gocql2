@@ -340,7 +340,7 @@ func isOrderedComparisonType(left, right PropertyType) bool {
 	if isInstantPropertyType(left) && isInstantPropertyType(right) {
 		return true
 	}
-	return left == PropertyTypeString && right == PropertyTypeString
+	return left == right && (left == PropertyTypeString || left == PropertyTypeBoolean)
 }
 
 func isScalarPropertyType(typ PropertyType) bool {
