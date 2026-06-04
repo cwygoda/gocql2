@@ -36,6 +36,8 @@ const (
 	basicSpatialPlusTestDataATSID = "/conf/basic-spatial-functions-plus/test-data"
 	spatialTestDataATSID          = "/conf/spatial-functions/test-data"
 	spatialLogicalATSID           = "/conf/spatial-functions/logical"
+	temporalTestDataATSID         = "/conf/temporal-functions/test-data"
+	temporalLogicalATSID          = "/conf/temporal-functions/logical"
 )
 
 //nolint:govet // Test evaluation records keep filter/query metadata before result payloads.
@@ -80,7 +82,9 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		basicSpatialLogicalATSID,
 		basicSpatialPlusTestDataATSID,
 		spatialTestDataATSID,
-		spatialLogicalATSID:
+		spatialLogicalATSID,
+		temporalTestDataATSID,
+		temporalLogicalATSID:
 		return true
 	default:
 		return false
@@ -319,7 +323,8 @@ func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
 		s.current.ID != accentiTestDataATSID &&
 		s.current.ID != basicSpatialTestDataATSID &&
 		s.current.ID != basicSpatialPlusTestDataATSID &&
-		s.current.ID != spatialTestDataATSID {
+		s.current.ID != spatialTestDataATSID &&
+		s.current.ID != temporalTestDataATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -498,6 +503,8 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 		return predicate.Conformance == ConformanceAccentInsensitiveComparison
 	case basicSpatialTestDataATSID, basicSpatialPlusTestDataATSID, spatialTestDataATSID:
 		return predicate.Conformance == ConformanceSpatialFunctions
+	case temporalTestDataATSID:
+		return predicate.Conformance == ConformanceTemporalFunctions
 	default:
 		return false
 	}
@@ -510,7 +517,8 @@ func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
 		caseiLogicalATSID,
 		accentiLogicalATSID,
 		basicSpatialLogicalATSID,
-		spatialLogicalATSID:
+		spatialLogicalATSID,
+		temporalLogicalATSID:
 		return true
 	default:
 		return false
@@ -666,7 +674,7 @@ func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredic
 		switch atsID {
 		case basicLogicalATSID:
 			matched = (!p2 && p1) || (p3 && p4) || (!p1 && !p4)
-		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID:
+		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID, temporalLogicalATSID:
 			matched = (!p1 && p2) || (p3 && !p4) || !p1 || !p4
 		}
 		if matched {
