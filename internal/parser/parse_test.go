@@ -10,14 +10,9 @@ import (
 )
 
 func TestParserCapabilities(t *testing.T) {
-	parser := NewParser(
-		WithAllowedProperties(
-			api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-			api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
-		),
-		WithSupportedFunctions("tolower"),
-		WithConformanceClasses("/conf/cql2-text/validate"),
-	)
+	parser := NewParser().WithAllowedProperties(api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
+		api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber}).WithSupportedFunctions("tolower").WithConformanceClasses("/conf/cql2-text/validate")
+
 	if got, want := parser.SupportedProperties(), []string{"name", "height"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("SupportedProperties() = %#v, want %#v", got, want)
 	}
@@ -42,7 +37,7 @@ func TestParserCapabilities(t *testing.T) {
 		}
 	}
 
-	functionParser := NewParser(WithAllowedFunctions(api.CaseIFunction(), api.AccentiFunction()))
+	functionParser := NewParser().WithAllowedFunctions(api.CaseIFunction(), api.AccentiFunction())
 	fnDefs := functionParser.SupportedFunctionDefinitions()
 	if got, want := len(fnDefs), 2; got != want {
 		t.Fatalf("len(SupportedFunctionDefinitions()) = %d, want %d", got, want)
@@ -63,43 +58,40 @@ func TestFunctionOptionsMergeWithConformance(t *testing.T) {
 		Returns: []api.FunctionType{api.FunctionTypeString},
 	}
 
-	parser := NewParser(
-		WithConformance(api.ConformanceCaseInsensitiveComparison),
-		WithAllowedFunctions(lower),
-	)
+	parser := NewParser().WithConformance(api.ConformanceCaseInsensitiveComparison).WithAllowedFunctions(lower)
+
 	if _, err := parser.ParseText(`tolower(CASEI(name)) = tolower(CASEI('ALICE'))`); err != nil {
 		t.Fatalf("ParseText with conformance and custom functions: %v", err)
 	}
 
-	parser = NewParser(
-		WithConformance(api.ConformanceCaseInsensitiveComparison, api.ConformancePropertyProperty),
-		WithAllowedFunctions(api.FunctionDefinition{
-			Name:    "casei",
-			Args:    []api.FunctionArgument{{Name: "value", Types: []api.FunctionType{api.FunctionTypeNumber}}},
-			Returns: []api.FunctionType{api.FunctionTypeNumber},
-		}),
-	)
+	parser = NewParser().WithConformance(api.ConformanceCaseInsensitiveComparison, api.ConformancePropertyProperty).WithAllowedFunctions(api.FunctionDefinition{
+		Name:    "casei",
+		Args:    []api.FunctionArgument{{Name: "value", Types: []api.FunctionType{api.FunctionTypeNumber}}},
+		Returns: []api.FunctionType{api.FunctionTypeNumber},
+	})
+
 	if _, err := parser.ParseText(`CASEI(1) = 1`); err != nil {
 		t.Fatalf("ParseText with later custom function override: %v", err)
 	}
 
-	parser = NewParser(
-		WithConformance(api.ConformanceCaseInsensitiveComparison),
-		WithSupportedFunctions("contains"),
-	)
+	parser = NewParser().WithConformance(api.ConformanceCaseInsensitiveComparison).WithSupportedFunctions("contains")
+
 	if _, err := parser.ParseText(`contains(CASEI(name), CASEI('alice'))`); err != nil {
 		t.Fatalf("ParseText with conformance and supported functions: %v", err)
 	}
 }
 
 func TestAllowedPropertyRegistry(t *testing.T) {
-	typedRegistry := WithAllowedProperties(
-		api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
-		api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
-		api.PropertyDefinition{Name: "count", Type: api.PropertyTypeInteger},
-		api.PropertyDefinition{Name: "active", Type: api.PropertyTypeBoolean},
-		api.PropertyDefinition{Name: "geometry", Type: api.PropertyTypeGeometry},
-	)
+	typedProperties := []api.PropertyDefinition{
+		{Name: "name", Type: api.PropertyTypeString},
+		{Name: "height", Type: api.PropertyTypeNumber},
+		{Name: "count", Type: api.PropertyTypeInteger},
+		{Name: "active", Type: api.PropertyTypeBoolean},
+		{Name: "geometry", Type: api.PropertyTypeGeometry},
+	}
+	newTypedParser := func() *Parser {
+		return NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic).WithAllowedProperties(typedProperties...)
+	}
 
 	okCases := []struct {
 		name string
@@ -115,7 +107,7 @@ func TestAllowedPropertyRegistry(t *testing.T) {
 	}
 	for _, tt := range okCases {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Parse([]byte(tt.in), tt.lang, WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic), typedRegistry); err != nil {
+			if _, err := newTypedParser().Parse([]byte(tt.in), tt.lang); err != nil {
 				t.Fatalf("Parse: %v", err)
 			}
 		})
@@ -140,15 +132,15 @@ func TestAllowedPropertyRegistry(t *testing.T) {
 	}
 	for _, tt := range errorCases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse([]byte(tt.in), tt.lang, WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic), typedRegistry)
+			_, err := newTypedParser().Parse([]byte(tt.in), tt.lang)
 			assertParseErrorContains(t, err, tt.message)
 		})
 	}
 
-	if _, err := ParseText(`name BETWEEN 1 AND 2`, WithConformance(api.ConformanceAdvancedComparisonOperators), WithSupportedProperties("name")); err != nil {
+	if _, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators).WithSupportedProperties("name").ParseText(`name BETWEEN 1 AND 2`); err != nil {
 		t.Fatalf("untyped supported property should remain usable in numeric context: %v", err)
 	}
-	_, err := ParseText(`other = 1`, WithSupportedProperties("name"))
+	_, err := NewParser().WithSupportedProperties("name").ParseText(`other = 1`)
 	assertParseErrorContains(t, err, `property "other" is not allowed`)
 }
 
@@ -265,11 +257,11 @@ func TestTextAndJSONParity(t *testing.T) {
 	}
 	for _, tt := range pairs {
 		t.Run(tt.name, func(t *testing.T) {
-			textExpr, err := ParseText(tt.text, WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic, api.ConformanceArrayFunctions), WithAllowedFunctions(api.StandardTextFunctions()...))
+			textExpr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic, api.ConformanceArrayFunctions).WithAllowedFunctions(api.StandardTextFunctions()...).ParseText(tt.text)
 			if err != nil {
 				t.Fatalf("ParseText: %v", err)
 			}
-			jsonExpr, err := ParseJSON([]byte(tt.json), WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic, api.ConformanceArrayFunctions), WithAllowedFunctions(api.StandardTextFunctions()...))
+			jsonExpr, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty, api.ConformanceArithmetic, api.ConformanceArrayFunctions).WithAllowedFunctions(api.StandardTextFunctions()...).ParseJSON([]byte(tt.json))
 			if err != nil {
 				t.Fatalf("ParseJSON: %v", err)
 			}

@@ -11,7 +11,7 @@ type unknownScalarExpression struct{}
 func (*unknownScalarExpression) Span() api.Span { return api.Span{} }
 
 func TestFunctionRegistryValidationEdges(t *testing.T) {
-	_, err := ParseText(`casei() = 'x'`, WithAllowedFunctions(api.CaseIFunction()))
+	_, err := NewParser().WithAllowedFunctions(api.CaseIFunction()).ParseText(`casei() = 'x'`)
 	assertParseErrorContains(t, err, `function "casei" expects exactly 1 arguments`)
 
 	variadic := api.FunctionDefinition{
@@ -22,7 +22,7 @@ func TestFunctionRegistryValidationEdges(t *testing.T) {
 		},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
 	}
-	_, err = ParseText(`any_of()`, WithAllowedFunctions(variadic))
+	_, err = NewParser().WithAllowedFunctions(variadic).ParseText(`any_of()`)
 	assertParseErrorContains(t, err, `function "any_of" expects at least 1 arguments`)
 
 	badDefs := []api.FunctionDefinition{
@@ -130,16 +130,16 @@ func TestFunctionReturnContexts(t *testing.T) {
 		{Name: "bool_fn", Returns: []api.FunctionType{api.FunctionTypeBoolean}},
 	}
 
-	if _, err := ParseJSON([]byte(`{"op":"like","args":[{"op":"str_fn","args":[]},"x"]}`), WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := NewParser().WithConformance(api.ConformanceAdvancedComparisonOperators, api.ConformancePropertyProperty).WithAllowedFunctions(defs...).ParseJSON([]byte(`{"op":"like","args":[{"op":"str_fn","args":[]},"x"]}`)); err != nil {
 		t.Fatalf("string-returning JSON function in character context: %v", err)
 	}
-	if _, err := ParseJSON([]byte(`{"op":">","args":[{"op":"num_fn","args":[]},1]}`), WithConformance(api.ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := NewParser().WithConformance(api.ConformancePropertyProperty).WithAllowedFunctions(defs...).ParseJSON([]byte(`{"op":">","args":[{"op":"num_fn","args":[]},1]}`)); err != nil {
 		t.Fatalf("number-returning JSON function in numeric comparison: %v", err)
 	}
-	if _, err := ParseText(`num_fn() > 1`, WithConformance(api.ConformancePropertyProperty), WithAllowedFunctions(defs...)); err != nil {
+	if _, err := NewParser().WithConformance(api.ConformancePropertyProperty).WithAllowedFunctions(defs...).ParseText(`num_fn() > 1`); err != nil {
 		t.Fatalf("number-returning text function in numeric comparison: %v", err)
 	}
-	if _, err := ParseText(`bool_fn()`, WithAllowedFunctions(defs...)); err != nil {
+	if _, err := NewParser().WithAllowedFunctions(defs...).ParseText(`bool_fn()`); err != nil {
 		t.Fatalf("boolean-returning text function as expression: %v", err)
 	}
 }

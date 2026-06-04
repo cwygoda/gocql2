@@ -8,11 +8,9 @@ import (
 )
 
 func TestWithConformanceCanonicalizesAndEnablesStandardFunctions(t *testing.T) {
-	parser := NewParser(WithConformance(
-		"case-insensitive-comparison",
+	parser := NewParser().WithConformance("case-insensitive-comparison",
 		"/conf/accent-insensitive-comparison/accenti",
-		api.ConformanceCaseInsensitiveComparison,
-	))
+		api.ConformanceCaseInsensitiveComparison)
 
 	wantClasses := []string{api.ConformanceCaseInsensitiveComparison, api.ConformanceAccentInsensitiveComparison}
 	if got := parser.ConformanceClasses(); !reflect.DeepEqual(got, wantClasses) {
@@ -57,7 +55,7 @@ func TestDefaultParserRejectsOptionalConformanceSyntax(t *testing.T) {
 }
 
 func TestWithConformanceUsesOnlyClassFunctionsWhenNoExplicitFunctions(t *testing.T) {
-	parser := NewParser(WithConformance(api.ConformanceBasicCQL2))
+	parser := NewParser().WithConformance(api.ConformanceBasicCQL2)
 	if got := parser.SupportedFunctions(); len(got) != 0 {
 		t.Fatalf("SupportedFunctions() = %#v, want no functions", got)
 	}
@@ -67,10 +65,7 @@ func TestWithConformanceUsesOnlyClassFunctionsWhenNoExplicitFunctions(t *testing
 }
 
 func TestWithConformanceMergesExplicitFunctions(t *testing.T) {
-	parser := NewParser(
-		WithAllowedFunctions(api.FunctionDefinition{Name: "tolower", Args: []api.FunctionArgument{{Types: []api.FunctionType{api.FunctionTypeString}}}, Returns: []api.FunctionType{api.FunctionTypeString}}),
-		WithConformance(api.ConformanceCaseInsensitiveComparison),
-	)
+	parser := NewParser().WithAllowedFunctions(api.FunctionDefinition{Name: "tolower", Args: []api.FunctionArgument{{Types: []api.FunctionType{api.FunctionTypeString}}}, Returns: []api.FunctionType{api.FunctionTypeString}}).WithConformance(api.ConformanceCaseInsensitiveComparison)
 
 	wantFunctions := []string{"casei", "tolower"}
 	if got := parser.SupportedFunctions(); !reflect.DeepEqual(got, wantFunctions) {
@@ -97,7 +92,7 @@ func TestStandardFunctionsForConformance(t *testing.T) {
 		t.Fatalf("array functions = %#v, want %#v", got, want)
 	}
 
-	parser := NewParser(WithConformance(api.ConformanceBasicSpatialFunctions, api.ConformancePropertyProperty))
+	parser := NewParser().WithConformance(api.ConformanceBasicSpatialFunctions, api.ConformancePropertyProperty)
 	if _, err := parser.ParseText(`TRUE = s_intersects(geom, BBOX(0, 0, 1, 1))`); err != nil {
 		t.Fatalf("spatial function in scalar context: %v", err)
 	}

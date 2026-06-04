@@ -26,67 +26,53 @@ type Parser struct {
 	cfg                 ParseConfig
 }
 
-// ParseOption mutates Parser configuration.
-type ParseOption func(*Parser)
-
-// NewParser builds a reusable parser.
-func NewParser(opts ...ParseOption) *Parser {
-	p := &Parser{
+// NewParser builds a reusable parser. Chain setup methods before concurrent use.
+func NewParser() *Parser {
+	return &Parser{
 		cfg: ParseConfig{MaxDepth: defaultMaxDepth, functions: functionRegistryDefaults()},
 	}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(p)
-		}
-	}
-	if p.cfg.MaxDepth <= 0 {
-		p.cfg.MaxDepth = defaultMaxDepth
-	}
-	if !p.cfg.functions.initialized {
-		p.cfg.functions = functionRegistryDefaults()
-	}
-	return p
 }
 
 // WithMaxDepth limits recursive parse depth.
-func WithMaxDepth(n int) ParseOption {
-	return func(p *Parser) { p.cfg.MaxDepth = n }
+func (p *Parser) WithMaxDepth(n int) *Parser {
+	p.cfg.MaxDepth = n
+	if p.cfg.MaxDepth <= 0 {
+		p.cfg.MaxDepth = defaultMaxDepth
+	}
+	return p
 }
 
 // WithSupportedProperties records the parser's advertised property set and
 // restricts parsing to that allow-list. Properties are treated as untyped; use
 // WithAllowedProperties when type validation is needed.
-func WithSupportedProperties(names ...string) ParseOption {
-	return func(p *Parser) {
-		p.supportedProperties = cloneStrings(names)
-		defs := make([]api.PropertyDefinition, 0, len(names))
-		for _, name := range names {
-			defs = append(defs, api.PropertyDefinition{Name: name, Type: api.PropertyTypeAny})
-		}
-		p.cfg.properties = newPropertyRegistry(defs, true)
+func (p *Parser) WithSupportedProperties(names ...string) *Parser {
+	p.supportedProperties = cloneStrings(names)
+	defs := make([]api.PropertyDefinition, 0, len(names))
+	for _, name := range names {
+		defs = append(defs, api.PropertyDefinition{Name: name, Type: api.PropertyTypeAny})
 	}
+	p.cfg.properties = newPropertyRegistry(defs, true)
+	return p
 }
 
 // WithAllowedProperties configures a fail-closed property registry. Any property
 // reference not present in the registry is rejected, and registered types are
 // used to validate character, numeric, comparison, and IN-list contexts.
-func WithAllowedProperties(defs ...api.PropertyDefinition) ParseOption {
-	return func(p *Parser) {
-		p.supportedProperties = propertyNames(defs)
-		p.cfg.properties = newPropertyRegistry(defs, true)
-	}
+func (p *Parser) WithAllowedProperties(defs ...api.PropertyDefinition) *Parser {
+	p.supportedProperties = propertyNames(defs)
+	p.cfg.properties = newPropertyRegistry(defs, true)
+	return p
 }
 
 // WithSupportedFunctions adds names to the fail-closed name-only function
 // registry. Registered functions accept any number of arguments of any type and
 // have an unknown return type. Use WithAllowedFunctions when signature
 // validation is needed.
-func WithSupportedFunctions(names ...string) ParseOption {
-	return func(p *Parser) {
-		defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), allowedAnyFunctions(names))
-		p.supportedFunctions = functionNames(defs)
-		p.cfg.functions = newFunctionRegistry(defs)
-	}
+func (p *Parser) WithSupportedFunctions(names ...string) *Parser {
+	defs := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), allowedAnyFunctions(names))
+	p.supportedFunctions = functionNames(defs)
+	p.cfg.functions = newFunctionRegistry(defs)
+	return p
 }
 
 // WithAllowedFunctions adds function definitions to the fail-closed function
@@ -94,17 +80,17 @@ func WithSupportedFunctions(names ...string) ParseOption {
 // registered signatures are used to validate argument counts, argument types,
 // and return-type contexts. Definitions added later override earlier
 // definitions with the same normalized name.
-func WithAllowedFunctions(defs ...api.FunctionDefinition) ParseOption {
-	return func(p *Parser) {
-		merged := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), defs)
-		p.supportedFunctions = functionNames(merged)
-		p.cfg.functions = newFunctionRegistry(merged)
-	}
+func (p *Parser) WithAllowedFunctions(defs ...api.FunctionDefinition) *Parser {
+	merged := mergeFunctionDefinitions(cloneFunctionDefinitions(p.cfg.functions.defs), defs)
+	p.supportedFunctions = functionNames(merged)
+	p.cfg.functions = newFunctionRegistry(merged)
+	return p
 }
 
 // WithConformanceClasses records the parser's advertised conformance classes.
-func WithConformanceClasses(classes ...string) ParseOption {
-	return func(p *Parser) { p.conformanceClasses = cloneStrings(classes) }
+func (p *Parser) WithConformanceClasses(classes ...string) *Parser {
+	p.conformanceClasses = cloneStrings(classes)
+	return p
 }
 
 // SupportedProperties returns the advertised property names.
@@ -155,18 +141,18 @@ func (p *Parser) ParseJSON(input []byte) (api.Expression, error) {
 }
 
 // Parse parses input in the requested CQL2 language.
-func Parse(input []byte, lang api.Language, opts ...ParseOption) (api.Expression, error) {
-	return NewParser(opts...).Parse(input, lang)
+func Parse(input []byte, lang api.Language) (api.Expression, error) {
+	return NewParser().Parse(input, lang)
 }
 
 // ParseText parses CQL2 Text into an AST.
-func ParseText(input string, opts ...ParseOption) (api.Expression, error) {
-	return NewParser(opts...).ParseText(input)
+func ParseText(input string) (api.Expression, error) {
+	return NewParser().ParseText(input)
 }
 
 // ParseJSON parses CQL2 JSON into an AST.
-func ParseJSON(input []byte, opts ...ParseOption) (api.Expression, error) {
-	return NewParser(opts...).ParseJSON(input)
+func ParseJSON(input []byte) (api.Expression, error) {
+	return NewParser().ParseJSON(input)
 }
 
 func applyParseConfigDefaults(cfg ParseConfig) ParseConfig {

@@ -13,15 +13,7 @@ func TestRootParserFacade(t *testing.T) {
 		Args:    []api.FunctionArgument{{Name: "value", Types: []api.FunctionType{api.FunctionTypeString}}},
 		Returns: []api.FunctionType{api.FunctionTypeBoolean},
 	}
-	p := NewParser(
-		WithMaxDepth(8),
-		WithAllowedProperties(defs...),
-		WithSupportedProperties("ignored"),
-		WithSupportedFunctions("legacy_fn"),
-		WithAllowedFunctions(fn),
-		WithConformance(api.ConformanceCaseInsensitiveComparison),
-		WithConformanceClasses("manual"),
-	)
+	p := NewParser().WithMaxDepth(8).WithAllowedProperties(defs...).WithSupportedProperties("ignored").WithSupportedFunctions("legacy_fn").WithAllowedFunctions(fn).WithConformance(api.ConformanceCaseInsensitiveComparison).WithConformanceClasses("manual")
 
 	if got := p.SupportedProperties(); len(got) != 1 || got[0] != "ignored" {
 		t.Fatalf("SupportedProperties = %#v", got)
