@@ -2,6 +2,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.8.1 - 2026-06-04
+#### Bug Fixes
+- coalesce negated SQL predicates - (923a90e) - Christian Wygoda
+- allow ordered boolean comparisons - (772374b) - Christian Wygoda
+#### Tests
+- complete remaining ATS fixture evaluation - (b511600) - Christian Wygoda
+- enable property-property ATS evaluation - (51352b0) - Christian Wygoda
+- enable temporal ATS fixture evaluation - (5bf065d) - Christian Wygoda
+- enable spatial ATS fixture evaluation - (b01f7a3) - Christian Wygoda
+- enable insensitive comparison ATS evaluation - (6d21a71) - Christian Wygoda
+- add CQL2 ATS suite coverage - (8d56f0f) - Christian Wygoda
+- add dialect-neutral ATS fixture data - (a26c687) - Christian Wygoda
+
+- - -
+
 ## v0.8.0 - 2026-06-03
 #### Features
 - add CQL2 SQL compiler - (8fceeac) - Christian Wygoda
