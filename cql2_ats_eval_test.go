@@ -43,6 +43,11 @@ const (
 	valueValueATSID               = "/conf/property-property/comparison-value-value"
 	propertyPropertyTestDataATSID = "/conf/property-property/test-data"
 	propertyPropertyLogicalATSID  = "/conf/property-property/logical"
+	functionsATSID                = "/conf/functions/functions"
+	arrayLogicalATSID             = "/conf/array-functions/logical"
+	arithmeticATSID               = "/conf/arithmetic/arithmetic"
+	arithmeticTestDataATSID       = "/conf/arithmetic/test-data"
+	arithmeticLogicalATSID        = "/conf/arithmetic/logical"
 )
 
 //nolint:govet // Test evaluation records keep filter/query metadata before result payloads.
@@ -94,7 +99,12 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		propertyPropertyATSID,
 		valueValueATSID,
 		propertyPropertyTestDataATSID,
-		propertyPropertyLogicalATSID:
+		propertyPropertyLogicalATSID,
+		functionsATSID,
+		arrayLogicalATSID,
+		arithmeticATSID,
+		arithmeticTestDataATSID,
+		arithmeticLogicalATSID:
 		return true
 	default:
 		return false
@@ -238,6 +248,52 @@ func (s *cql2ATSSuite) isInsensitiveStringPredicateATS() bool {
 
 func (s *cql2ATSSuite) forEachNumericQueryableEvaluateFilters() error {
 	if s.current.ID != advancedBetweenATSID {
+		return nil
+	}
+	s.executedByStep = true
+	return nil
+}
+
+func (s *cql2ATSSuite) atLeastOneQueryableHasNumericDataType() error {
+	if s.current.ID != arithmeticATSID {
+		return nil
+	}
+	s.executedByStep = true
+	if len(atsFixtureQueryablesOfTypes(PropertyTypeNumber, PropertyTypeInteger)) == 0 {
+		return fmt.Errorf("ATS fixture data source %q has no numeric queryable", atsFixture.Name)
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) forEachQueryableConstructArithmeticExpressions() error {
+	if s.current.ID != arithmeticATSID {
+		return nil
+	}
+	s.executedByStep = true
+	for _, queryable := range atsFixtureQueryablesOfTypes(PropertyTypeNumber, PropertyTypeInteger) {
+		filters := []string{
+			queryable.Name + " + 1 > 0",
+			queryable.Name + " - 1 < 100000000",
+			queryable.Name + " * 2 >= 0",
+			queryable.Name + " / 1 = " + queryable.Name,
+		}
+		for _, filter := range filters {
+			s.recordATSEvaluation(filter, queryable.Name, filter, nil)
+		}
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) theListOfFunctionsWithArgumentsAndReturnTypeSupportedByTheImplementationUnderTest() error {
+	if s.current.ID != functionsATSID {
+		return nil
+	}
+	s.executedByStep = true
+	return nil
+}
+
+func (s *cql2ATSSuite) forEachFunctionConstructMultipleValidFilterExpressions() error {
+	if s.current.ID != functionsATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -396,7 +452,8 @@ func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
 		s.current.ID != basicSpatialPlusTestDataATSID &&
 		s.current.ID != spatialTestDataATSID &&
 		s.current.ID != temporalTestDataATSID &&
-		s.current.ID != propertyPropertyTestDataATSID {
+		s.current.ID != propertyPropertyTestDataATSID &&
+		s.current.ID != arithmeticTestDataATSID {
 		return nil
 	}
 	s.executedByStep = true
@@ -604,6 +661,8 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 		return predicate.Conformance == ConformanceTemporalFunctions
 	case propertyPropertyTestDataATSID:
 		return predicate.Conformance == ConformancePropertyProperty
+	case arithmeticTestDataATSID:
+		return predicate.Conformance == ConformanceArithmetic
 	default:
 		return false
 	}
@@ -618,7 +677,9 @@ func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
 		basicSpatialLogicalATSID,
 		spatialLogicalATSID,
 		temporalLogicalATSID,
-		propertyPropertyLogicalATSID:
+		propertyPropertyLogicalATSID,
+		arrayLogicalATSID,
+		arithmeticLogicalATSID:
 		return true
 	default:
 		return false
@@ -774,7 +835,7 @@ func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredic
 		switch atsID {
 		case basicLogicalATSID:
 			matched = (!p2 && p1) || (p3 && p4) || (!p1 && !p4)
-		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID, temporalLogicalATSID, propertyPropertyLogicalATSID:
+		case advancedLogicalATSID, caseiLogicalATSID, accentiLogicalATSID, basicSpatialLogicalATSID, spatialLogicalATSID, temporalLogicalATSID, propertyPropertyLogicalATSID, arrayLogicalATSID, arithmeticLogicalATSID:
 			matched = (!p1 && p2) || (p3 && !p4) || !p1 || !p4
 		}
 		if matched {
