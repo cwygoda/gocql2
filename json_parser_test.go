@@ -198,6 +198,8 @@ func TestParseJSONBooleanComparisons(t *testing.T) {
 		`{"op":"=","args":[{"property":"active"},true]}`,
 		`{"op":"<>","args":[false,{"property":"archived"}]}`,
 		`{"op":"=","args":[true,false]}`,
+		`{"op":">","args":[{"property":"active"},false]}`,
+		`{"op":"<=","args":[true,{"property":"archived"}]}`,
 	}
 	for _, input := range cases {
 		expr, err := ParseJSON([]byte(input), WithConformance(ConformancePropertyProperty))
