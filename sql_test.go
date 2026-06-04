@@ -225,7 +225,7 @@ func TestToSQLPredicateVariants(t *testing.T) {
 		{name: "not between", cql: "height NOT BETWEEN 1 AND 2", conf: []string{ConformanceAdvancedComparisonOperators}, want: `("height" NOT BETWEEN CAST($1 AS numeric) AND CAST($2 AS numeric))`, args: []any{"1", "2"}},
 		{name: "in", cql: "name IN ('x','y')", conf: []string{ConformanceAdvancedComparisonOperators}, want: `("name" IN ($1, $2))`, args: []any{"x", "y"}},
 		{name: "not in", cql: "name NOT IN ('x','y')", conf: []string{ConformanceAdvancedComparisonOperators}, want: `("name" NOT IN ($1, $2))`, args: []any{"x", "y"}},
-		{name: "not", cql: "NOT (name = 'x')", want: `(NOT (("name" = $1)))`, args: []any{"x"}},
+		{name: "not", cql: "NOT (name = 'x')", want: `(NOT (COALESCE(("name" = $1), FALSE)))`, args: []any{"x"}},
 		{name: "or", cql: "name = 'x' OR height = 1", want: `((("name" = $1)) OR (("height" = CAST($2 AS numeric))))`, args: []any{"x", "1"}},
 		{name: "integer division", cql: "height div 2 = 3", conf: []string{ConformanceArithmetic}, want: `(trunc(("height") / (CAST($1 AS numeric))) = CAST($2 AS numeric))`, args: []any{"2", "3"}},
 		{name: "power", cql: "height ^ 2 = 4", conf: []string{ConformanceArithmetic}, want: `(power("height", CAST($1 AS numeric)) = CAST($2 AS numeric))`, args: []any{"2", "4"}},

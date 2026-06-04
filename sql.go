@@ -400,7 +400,7 @@ func (c *sqlCompiler) renderLogical(expr *LogicalExpression) (SQLFragment, error
 		if err != nil {
 			return SQLFragment{}, err
 		}
-		return SQLFragment{Text: "(NOT (" + arg.Text + "))"}, nil
+		return SQLFragment{Text: "(NOT (COALESCE(" + arg.Text + ", FALSE)))"}, nil
 	}
 	if len(expr.Args) == 0 {
 		return SQLFragment{}, fmt.Errorf("logical expression %q has no arguments", expr.Op)
