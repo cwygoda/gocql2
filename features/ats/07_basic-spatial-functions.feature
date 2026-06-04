@@ -3,7 +3,6 @@
 @cql2-ats @basic-spatial-functions
 Feature: A.7 Basic Spatial Functions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
   @test-25
   Scenario: A.7.1. Conformance Test 25 /conf/basic-spatial-functions/s_intersects
@@ -24,7 +23,7 @@ Feature: A.7 Basic Spatial Functions abstract conformance tests
     And assert unsuccessful execution of the evaluation for the third filter expressions (invalid coordinate);
     And store the valid predicates for each data source.
 
-  @expected-fail @test-26
+  @test-26
   Scenario: A.7.2. Conformance Test 26 /conf/basic-spatial-functions/test-data
     # ATS section: A.7.2
     # ATS id: /conf/basic-spatial-functions/test-data
@@ -38,7 +37,7 @@ Feature: A.7 Basic Spatial Functions abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-27
+  @test-27
   Scenario: A.7.3. Conformance Test 27 /conf/basic-spatial-functions/logical
     # ATS section: A.7.3
     # ATS id: /conf/basic-spatial-functions/logical

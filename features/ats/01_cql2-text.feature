@@ -3,7 +3,6 @@
 @cql2-ats @cql2-text
 Feature: A.1 CQL2 Text abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
   @test-1
   Scenario Outline: A.1.1. Conformance Test 1 /conf/cql2-text/validate

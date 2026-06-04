@@ -3,9 +3,8 @@
 @cql2-ats @functions
 Feature: A.13 Functions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-51
+  @test-51
   Scenario: A.13.1. Conformance Test 51 /conf/functions/functions
     # ATS section: A.13.1
     # ATS id: /conf/functions/functions

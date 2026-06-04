@@ -3,9 +3,8 @@
 @cql2-ats @accent-insensitive-comparison
 Feature: A.6 Accent-insensitive Comparison abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-19
+  @test-19
   Scenario: A.6.1. Conformance Test 19 /conf/accent-insensitive-comparison/accenti
     # ATS section: A.6.1
     # ATS id: /conf/accent-insensitive-comparison/accenti
@@ -21,7 +20,7 @@ Feature: A.6 Accent-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable have no item in common;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-20
+  @test-20
   Scenario: A.6.2. Conformance Test 20 /conf/accent-insensitive-comparison/accenti-like
     # ATS section: A.6.2
     # ATS id: /conf/accent-insensitive-comparison/accenti-like
@@ -38,7 +37,7 @@ Feature: A.6 Accent-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-21
+  @test-21
   Scenario: A.6.3. Conformance Test 21 /conf/accent-insensitive-comparison/accenti-casei
     # ATS section: A.6.3
     # ATS id: /conf/accent-insensitive-comparison/accenti-casei
@@ -55,7 +54,7 @@ Feature: A.6 Accent-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-22
+  @test-22
   Scenario: A.6.4. Conformance Test 22 /conf/accent-insensitive-comparison/accenti-casei-like
     # ATS section: A.6.4
     # ATS id: /conf/accent-insensitive-comparison/accenti-casei-like
@@ -73,7 +72,7 @@ Feature: A.6 Accent-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-23
+  @test-23
   Scenario: A.6.5. Conformance Test 23 /conf/accent-insensitive-comparison/test-data
     # ATS section: A.6.5
     # ATS id: /conf/accent-insensitive-comparison/test-data
@@ -87,7 +86,7 @@ Feature: A.6 Accent-insensitive Comparison abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-24
+  @test-24
   Scenario: A.6.6. Conformance Test 24 /conf/accent-insensitive-comparison/logical
     # ATS section: A.6.6
     # ATS id: /conf/accent-insensitive-comparison/logical

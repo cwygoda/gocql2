@@ -2,13 +2,18 @@ package gocql2
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cucumber/godog"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
 type cql2AbstractTest struct {
@@ -23,22 +28,49 @@ type cql2ATSSuite struct {
 	parsed     Expression
 	current    cql2AbstractTest
 
-	total              int
-	passed             int
-	expectedFailures   int
-	unexpectedPasses   int
-	unexpectedFailures int
+	total  int
+	passed int
+	failed int
 
 	mu             sync.Mutex
-	expectedFail   bool
 	executedByStep bool
 
 	spatialParseErrs []error
 	spatialFilters   []string
+
+	atsEvaluations      []atsEvaluation
+	storedATSPredicates []atsStoredPredicate
+	atsDB               *sql.DB
+	atsParseOpts        []ParseOption
+	atsSQLOpts          []SQLOption
 }
 
 func TestCQL2AbstractTestSuite(t *testing.T) {
-	suiteState := &cql2ATSSuite{}
+	if testing.Short() {
+		t.Skip("skipping PostGIS-backed ATS runner in short mode")
+	}
+
+	db, cleanup := setupATSPostGISDatabase(t)
+	defer cleanup()
+
+	props := atsFixturePostGISSQLProperties()
+	suiteState := &cql2ATSSuite{
+		atsDB: db,
+		atsParseOpts: []ParseOption{
+			WithConformance(
+				ConformanceAdvancedComparisonOperators,
+				ConformanceCaseInsensitiveComparison,
+				ConformanceAccentInsensitiveComparison,
+				ConformanceArithmetic,
+				ConformanceTemporalFunctions,
+				ConformanceArrayFunctions,
+				ConformanceSpatialFunctions,
+				ConformancePropertyProperty,
+			),
+			WithAllowedProperties(SQLPropertyDefinitions(props...)...),
+		},
+		atsSQLOpts: []SQLOption{WithSQLProperties(props...)},
+	}
 
 	suite := godog.TestSuite{
 		Name:                "cql2-abstract-test-suite",
@@ -52,19 +84,61 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 
 	status := suite.Run()
 	summary := fmt.Sprintf(
-		"CQL2 ATS summary: %d/%d failed as expected; %d/%d passed; %d unexpected pass(es); %d unexpected failure(s)",
-		suiteState.expectedFailures,
-		suiteState.total,
+		"CQL2 ATS summary: %d/%d passed; %d/%d failed",
 		suiteState.passed,
 		suiteState.total,
-		suiteState.unexpectedPasses,
-		suiteState.unexpectedFailures,
+		suiteState.failed,
+		suiteState.total,
 	)
 	t.Log(summary)
-	t.Run(fmt.Sprintf("summary: %d of %d failed as expected", suiteState.expectedFailures, suiteState.total), func(t *testing.T) {})
+	t.Run(fmt.Sprintf("summary: %d of %d passed", suiteState.passed, suiteState.total), func(t *testing.T) {})
 
 	if status != 0 {
 		t.Fatalf("CQL2 Abstract Test Suite failed with status %d", status)
+	}
+}
+
+func setupATSPostGISDatabase(t *testing.T) (*sql.DB, func()) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+
+	ctr, err := postgres.Run(
+		ctx,
+		"postgis/postgis:16-3.4",
+		postgres.WithDatabase("cql2"),
+		postgres.WithUsername("cql2"),
+		postgres.WithPassword("cql2"),
+		postgres.BasicWaitStrategies(),
+	)
+	if err != nil {
+		cancel()
+		t.Skipf("PostGIS container unavailable for ATS runner: %v", err)
+	}
+	t.Cleanup(func() { testcontainers.CleanupContainer(t, ctr) })
+
+	conn, err := ctr.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", conn)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	if err := setupPostGISFixture(ctx, db); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Errorf("close ATS database after setup failure: %v", closeErr)
+		}
+		cancel()
+		t.Fatal(err)
+	}
+
+	return db, func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close ATS database: %v", err)
+		}
+		cancel()
 	}
 }
 
@@ -74,10 +148,10 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 		s.executeErr = nil
 		s.parseErr = nil
 		s.parsed = nil
-		s.expectedFail = scenarioHasTag(sc, "@expected-fail")
 		s.executedByStep = false
 		s.spatialParseErrs = nil
 		s.spatialFilters = nil
+		s.atsEvaluations = nil
 		return ctx, nil
 	})
 
@@ -96,6 +170,44 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the comparison right literal is "([^"]*)"$`, s.theComparisonRightLiteralIs)
 
 	ctx.Step(`^One or more data sources, each with a list of queryables\.$`, s.oneOrMoreDataSourcesWithQueryableLists)
+	ctx.Step(`^One or more data sources\.$`, s.oneOrMoreDataSources)
+	ctx.Step(`^n/a$`, s.nA)
+	ctx.Step(`^Test '/conf/basic-cql2/basic-test' passes\.$`, s.dependencyPasses)
+	ctx.Step(`^The conformance class Advanced Comparison Operators passes\.$`, s.dependencyPasses)
+	ctx.Step(`^The conformance class Case-insensitive Comparison passes\.$`, s.dependencyPasses)
+	ctx.Step(`^The implementation under test uses the test dataset\.$`, s.theImplementationUsesTheTestDataset)
+	ctx.Step(`^The stored predicates for each data source\.$`, s.theStoredPredicatesForEachDataSource)
+	ctx.Step(`^The stored predicates for each data source, including from the dependencies\.$`, s.theStoredPredicatesForEachDataSource)
+	ctx.Step(`^assert that there is at least one queryable for each data source;$`, s.assertAtLeastOneQueryableForEachDataSource)
+	ctx.Step(`^assert that the data type \(.+\) is specified for each queryable;$`, s.assertDataTypeSpecifiedForEachQueryable)
+	ctx.Step(`^assert that at least one queryable for each data source is of data type String, Boolean, Number, Integer, Timestamp or Date\.$`, s.assertAtLeastOneScalarQueryable)
+	ctx.Step(`^(?:For|for) each queryable \{queryable\} of one of the data types String, Boolean, Number, Integer, Timestamp or Date, evaluate the following filter expressions$`, s.forEachScalarQueryableEvaluateComparisonFilters)
+	ctx.Step(`^For each queryable \{queryable\} , evaluate the following filter expressions$`, s.forEachQueryableEvaluateFilters)
+	ctx.Step(`^For each data source, evaluate the following filter expressions$`, s.forEachDataSourceEvaluateFilters)
+	ctx.Step(`^(\{queryable\} (?:=|<>|>|<|>=|<=) \{value\})$`, s.evaluateQueryableValueComparisonTemplate)
+	ctx.Step(`^(\{queryable\} IS NULL)$`, s.evaluateQueryableIsNullTemplate)
+	ctx.Step(`^(\{queryable\} is not null)$`, s.evaluateQueryableIsNullTemplate)
+	ctx.Step(`^(true)$`, s.evaluateBooleanFilter)
+	ctx.Step(`^(false)$`, s.evaluateBooleanFilter)
+	ctx.Step(`^where \{value\} depends on the data type:$`, s.acknowledgeScalarValueMetadata)
+	ctx.Step(`^(String|Boolean|Number|Integer|Timestamp|Date): .+$`, s.acknowledgeScalarTypedValueMetadata)
+	ctx.Step(`^(?:For|for) each queryable \{queryable\} of type String, evaluate the following filter expressions$`, s.forEachStringQueryableEvaluateFilters)
+	ctx.Step(`^((?:\{queryable\}|CASEI\(\{queryable\}\)|ACCENTI\(\{queryable\}\)|ACCENTI\(CASEI\(\{queryable\}\)\)) [Ll][Ii][Kk][Ee] .+)$`, s.evaluateStringPredicateTemplate)
+	ctx.Step(`^((?:CASEI\(\{queryable\}\)|ACCENTI\(\{queryable\}\)|ACCENTI\(CASEI\(\{queryable\}\)\)) (?:=|<>) .+)$`, s.evaluateStringPredicateTemplate)
+	ctx.Step(`^(?:for|For) each queryable \{queryable\} of type Number or Integer, evaluate the following filter expressions$`, s.forEachNumericQueryableEvaluateFilters)
+	ctx.Step(`^(\{queryable\} [Bb][Ee][Tt][Ww][Ee][Ee][Nn] .+)$`, s.evaluateNumericPredicateTemplate)
+	ctx.Step(`^(?:for|For) each queryable \{queryable\} of type (Number or Integer|String|Boolean|Timestamp|Date), evaluate the following filter expression (.+) ;$`, s.evaluateTypedQueryableFilterExpression)
+	ctx.Step(`^Evaluate each predicate in Predicates and expected results(?: , if the conditional dependency is met)? \.$`, s.evaluateEachFixturePredicate)
+	ctx.Step(`^Evaluate each predicate in Combinations of predicates and expected results \.$`, s.evaluateStoredPredicateCombinations)
+	ctx.Step(`^For the data source 'ne_110m_populated_places_simple', evaluate the filter expression (.+) for each combination of predicates \{p1\} to \{p4\} in Combinations of predicates and expected results \.$`, s.evaluateSpecificStoredPredicateCombination)
+	ctx.Step(`^For each data source, select at least 10 random combinations of four predicates \( \{p1\} to \{p4\} \) from the stored predicates and evaluate the filter expression (.+) \.$`, s.evaluateSpecificStoredPredicateCombination)
+	ctx.Step(`^assert successful execution of the evaluation;$`, s.assertSuccessfulATSEvaluation)
+	ctx.Step(`^assert that the expected result is returned\.$`, s.assertExpectedATSResultsReturned)
+	ctx.Step(`^assert that the two result sets for each queryable for the operators (=|>|<) and (<>|<=|>=) have no item in common;$`, s.assertOperatorResultSetsDisjoint)
+	ctx.Step(`^assert that the two result sets for each queryable have no item in common;$`, s.assertPairedResultSetsDisjoint)
+	ctx.Step(`^assert that the result sets for false are empty;$`, s.assertFalseResultSetsEmpty)
+	ctx.Step(`^assert that the two result sets for each queryable for the pattern expression '([^']*)' and '([^']*)' have no item in common;$`, s.assertPatternResultSetsDisjoint)
+	ctx.Step(`^assert that the two result sets for each queryable for the pattern expression '([^']*)' and '([^']*)' are identical;$`, s.assertPatternResultSetsIdentical)
 	ctx.Step(`^At least one queryable has an array data type\.$`, s.atLeastOneQueryableHasArrayDataType)
 	ctx.Step(`^For each queryable \{queryable\} with an array data type, evaluate the following filter expressions$`, s.forEachArrayQueryableEvaluateFilters)
 	ctx.Step(`^(A_(?:CONTAINS|CONTAINEDBY|EQUALS|OVERLAPS)\(\{queryable\},\("foo","bar"\)\))$`, s.iEvaluateTheArrayPredicateTemplate)
@@ -117,17 +229,7 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type Date, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
 	ctx.Step(`^(T_(?:AFTER|BEFORE|CONTAINS|DISJOINT|DURING|EQUALS|FINISHEDBY|FINISHES|INTERSECTS|MEETS|METBY|OVERLAPPEDBY|OVERLAPS|STARTEDBY|STARTS)\(.+\))$`, s.iEvaluateTheTemporalPredicateTemplate)
 
-	ctx.Step(`^assert successful execution of the evaluation;$`, s.arrayPredicateParsingSucceeds)
 	ctx.Step(`^store the valid predicates for each data source\.$`, s.storeTheValidPredicatesForEachDataSource)
-}
-
-func scenarioHasTag(sc *godog.Scenario, tag string) bool {
-	for _, scenarioTag := range sc.Tags {
-		if scenarioTag.Name == tag {
-			return true
-		}
-	}
-	return false
 }
 
 var cql2AbstractTestScenarioPattern = regexp.MustCompile(`^(A\.\d+(?:\.\d+)*)\. .* (/conf/\S+)$`)
@@ -196,7 +298,7 @@ func (s *cql2ATSSuite) isSpatialATS() bool {
 }
 
 func (s *cql2ATSSuite) oneOrMoreDataSourcesWithQueryableLists() error {
-	if s.isArrayPredicateATS() || s.isSpatialATS() {
+	if s.isImplementedScalarATS() || s.isArrayPredicateATS() || s.isSpatialATS() {
 		s.executedByStep = true
 	}
 	return nil
@@ -313,7 +415,12 @@ func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
 }
 
 func (s *cql2ATSSuite) storeTheValidPredicatesForEachDataSource() error {
-	if s.isArrayPredicateATS() || s.isTemporalFunctionsATS() || s.isSpatialATS() {
+	if s.isImplementedScalarATS() {
+		s.executedByStep = true
+		s.storeSuccessfulATSPredicates()
+		return nil
+	}
+	if s.isArrayPredicateATS() || s.isTemporalFunctionsATS() || s.isSpatialATS() && len(s.spatialFilters) > 0 {
 		s.executedByStep = true
 	}
 	return nil
@@ -393,20 +500,10 @@ func (s *cql2ATSSuite) recordAbstractTestResult() error {
 	s.total++
 
 	if s.executeErr == nil {
-		if s.expectedFail {
-			s.unexpectedPasses++
-			return fmt.Errorf("%s passed but is still tagged @expected-fail; remove the tag to mark it implemented", s.current.ID)
-		}
-
 		s.passed++
 		return nil
 	}
 
-	if s.expectedFail {
-		s.expectedFailures++
-		return nil
-	}
-
-	s.unexpectedFailures++
+	s.failed++
 	return s.executeErr
 }

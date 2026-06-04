@@ -3,7 +3,6 @@
 @cql2-ats @array-functions
 Feature: A.11 Array Functions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
   @test-44
   Scenario: A.11.1. Conformance Test 44 /conf/array-functions/array-predicates
@@ -23,7 +22,7 @@ Feature: A.11 Array Functions abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-45
+  @test-45
   Scenario: A.11.2. Conformance Test 45 /conf/array-functions/logical
     # ATS section: A.11.2
     # ATS id: /conf/array-functions/logical

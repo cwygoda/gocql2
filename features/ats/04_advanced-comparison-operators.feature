@@ -3,9 +3,8 @@
 @cql2-ats @advanced-comparison-operators
 Feature: A.4 Advanced Comparison Operators abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-10
+  @test-10
   Scenario: A.4.1. Conformance Test 10 /conf/advanced-comparison-operators/like
     # ATS section: A.4.1
     # ATS id: /conf/advanced-comparison-operators/like
@@ -25,7 +24,7 @@ Feature: A.4 Advanced Comparison Operators abstract conformance tests
     And assert that the two result sets for each queryable for the pattern expression '%' and '%%' are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-11
+  @test-11
   Scenario: A.4.2. Conformance Test 11 /conf/advanced-comparison-operators/between
     # ATS section: A.4.2
     # ATS id: /conf/advanced-comparison-operators/between
@@ -40,7 +39,7 @@ Feature: A.4 Advanced Comparison Operators abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-12
+  @test-12
   Scenario: A.4.3. Conformance Test 12 /conf/advanced-comparison-operators/in
     # ATS section: A.4.3
     # ATS id: /conf/advanced-comparison-operators/in
@@ -57,7 +56,7 @@ Feature: A.4 Advanced Comparison Operators abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-13
+  @test-13
   Scenario: A.4.4. Conformance Test 13 /conf/advanced-comparison-operators/test-data
     # ATS section: A.4.4
     # ATS id: /conf/advanced-comparison-operators/test-data
@@ -71,7 +70,7 @@ Feature: A.4 Advanced Comparison Operators abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-14
+  @test-14
   Scenario: A.4.5. Conformance Test 14 /conf/advanced-comparison-operators/logical
     # ATS section: A.4.5
     # ATS id: /conf/advanced-comparison-operators/logical
