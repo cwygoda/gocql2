@@ -2,45 +2,164 @@
 
 [![codecov](https://codecov.io/github/cwygoda/gocql2/graph/badge.svg?token=18FRBD1HD4)](https://codecov.io/github/cwygoda/gocql2)
 
-## Dev 101
+gocql2 is a Go library for parsing [OGC Common Query Language 2 (CQL2)][cql2] filters and, when needed, compiling them into safe parameterized SQL fragments.
 
-You really only need [mise] which is used to manage the correct Golang version and all other
-developer tooling.
+Use it when you accept CQL2 from API clients, such as OGC API Features `filter` parameters, and need to validate the filter against your queryable fields before applying it to a datastore.
 
-Then install tools and bootstrap your local project checkout with `mise install && task bootstrap`.
+## Install
 
-### Common Dev Tasks
+```sh
+go get github.com/cwygoda/cql2
+```
 
-...are run using [task], configured in [Taskfile.yml](./Taskfile.yml):
+## Quick start: parse CQL2 Text
 
-- `task format`: format source code (using [gofumpt])
-- `task lint:actions`: lint Github actions (using [actionlint])
-- `task lint:go`: lint Go source code (using [golangci-lint])
-- `task lint:markdown`: lint Markdown files (using [markdownlint-cli2])
-- `task lint`: lint source code and Markdown
-- `task test:unit`: run unit tests (using [gotestsum])
-- `task test:ats`: run CQL2 Abstract Test Suite Gherkin tests
-- `task test`: run all test suites
-- `task check`: run lint and test
-- `task vulnerabilities`: check dependencies for vulnerabilities (using [govuln] and [osv-scanner])
-- `task secrets`: check for secrets in code (using [gitleaks])
+```go
+package main
 
-### Committing
+import (
+    "fmt"
+    "log"
 
-When committing, [lefthook] managed git hooks are run (see [.lefthook.yml](./.lefthook.yml)) to
-check the code and commit message, which has to use [conventional commits] style (checked using
-[cocogitto]).
+    "github.com/cwygoda/cql2"
+    "github.com/cwygoda/cql2/api"
+)
 
-[actionlint]: https://github.com/rhysd/actionlint
-[cocogitto]: https://docs.cocogitto.io
-[conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
-[gitleaks]: https://github.com/gitleaks/gitleaks
-[gofumpt]: https://github.com/mvdan/gofumpt
-[golangci-lint]: https://golangci-lint.run
-[gotestsum]: https://github.com/gotestyourself/gotestsum
-[govuln]: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
-[lefthook]: https://lefthook.dev
-[markdownlint-cli2]: https://github.com/DavidAnson/markdownlint-cli2
-[mise]: https://mise.jdx.dev
-[osv-scanner]: https://github.com/google/osv-scanner
-[task]: https://taskfile.dev
+func main() {
+    expr, err := cql2.NewParser().
+        WithAllowedProperties(
+            api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
+            api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
+        ).
+        ParseText("name = 'Oak' AND height >= 10")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("%T\n", expr) // *api.LogicalExpression
+}
+```
+
+For one-off parsing without schema validation, use `gocql2.ParseText`, `gocql2.ParseJSON`, or `gocql2.Parse`.
+
+## Parse CQL2 JSON
+
+```go
+expr, err := cql2.NewParser().
+    WithAllowedProperties(
+        api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString},
+        api.PropertyDefinition{Name: "height", Type: api.PropertyTypeNumber},
+    ).
+    ParseJSON([]byte(`{
+        "op": "and",
+        "args": [
+            {"op": "=", "args": [{"property": "name"}, "Oak"]},
+            {"op": ">=", "args": [{"property": "height"}, 10]}
+        ]
+    }`))
+```
+
+## Compile CQL2 to SQL
+
+The `sql` package turns a parsed AST into a parameterized SQL expression. Property mappings are fail-closed by default: every CQL2 property must be explicitly mapped to trusted application-authored SQL.
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/cwygoda/cql2"
+    "github.com/cwygoda/cql2/api"
+    "github.com/cwygoda/cql2/sql"
+)
+
+func main() {
+    props := []sql.Property{
+        {Name: "name", Type: api.PropertyTypeString, Expr: sql.Column("assets", "name")},
+        {Name: "height", Type: api.PropertyTypeNumber, Expr: sql.Column("assets", "height")},
+    }
+
+    expr, err := cql2.NewParser().
+        WithConformance(
+            api.ConformanceAdvancedComparisonOperators,
+            api.ConformanceCaseInsensitiveComparison,
+        ).
+        WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...).
+        ParseText("CASEI(name) LIKE casei('oak%') AND height >= 10")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    where, err := sql.ToSQL(
+        expr,
+        sql.PostGISDialect(),
+        sql.WithSQLProperties(props...),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println(where.Text)
+    fmt.Printf("%#v\n", where.Args)
+}
+```
+
+Output:
+
+```text
+(((lower("assets"."name") LIKE lower($1))) AND (("assets"."height" >= CAST($2 AS numeric))))
+[]interface {}{"oak%", "10"}
+```
+
+You can then compose `where.Text` into your query and pass `where.Args` to your database driver.
+
+## Validate queryables and functions
+
+A reusable parser can be configured before concurrent use:
+
+- `WithAllowedProperties` rejects unknown properties and validates property types in scalar, comparison, temporal, spatial, array, and function contexts.
+- `WithSupportedProperties` advertises a property allow-list without type validation.
+- `WithAllowedFunctions` rejects unknown functions and validates function signatures.
+- `WithSupportedFunctions` advertises function names without signature validation.
+- `WithConformance` records CQL2 conformance classes and enables standard CQL2 functions implied by those classes, such as `CASEI`, spatial predicates, temporal predicates, and array predicates.
+- `WithMaxDepth` limits recursive parse depth for defensive parsing.
+
+## SQL dialects
+
+gocql2 includes:
+
+- `sql.BaseDialect` for ANSI-style placeholders and identifier quoting.
+- `sql.PostGISDialect` for PostgreSQL/PostGIS placeholders, case/accent functions, spatial predicates, temporal predicates, array predicates, and geometry literals.
+
+Implement `sql.Dialect` or embed `sql.BaseDialect` to customize database-specific rendering.
+
+## Error handling
+
+Parser errors are returned as `*api.ParseError` and include source language plus either text position or JSON path information.
+
+```go
+expr, err := gocql2.ParseText("name =")
+if err != nil {
+    var parseErr *api.ParseError
+    if errors.As(err, &parseErr) {
+        log.Printf("bad CQL2 at line %d, column %d", parseErr.Location.Line, parseErr.Location.Column)
+    }
+}
+_ = expr
+```
+
+SQL generation errors are regular Go errors, for example when a property has no SQL mapping or a dialect does not support a requested function.
+
+## Supported input and features
+
+- CQL2 Text and CQL2 JSON parsing.
+- Logical expressions, comparisons, `LIKE`, `BETWEEN`, `IN`, `IS NULL`, arithmetic, and boolean/null/string/number literals.
+- Standard CQL2 spatial, temporal, and array predicates when enabled by conformance.
+- Typed public AST in the `api` package.
+- Parameterized SQL fragment generation with explicit property mapping.
+
+See [REFERENCES.md](./REFERENCES.md) for CQL2 references and [DEVELOPMENT.md](./DEVELOPMENT.md) for contributor setup.
+
+[cql2]: https://docs.ogc.org/is/21-065r2/21-065r2.html
