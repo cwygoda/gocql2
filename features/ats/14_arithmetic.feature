@@ -3,9 +3,8 @@
 @cql2-ats @arithmetic
 Feature: A.14 Arithmetic Expressions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-52
+  @test-52
   Scenario: A.14.1. Conformance Test 52 /conf/arithmetic/arithmetic
     # ATS section: A.14.1
     # ATS id: /conf/arithmetic/arithmetic
@@ -18,7 +17,7 @@ Feature: A.14 Arithmetic Expressions abstract conformance tests
     When For each queryable construct multiple valid filter expressions involving arithmetic expressions.
     Then assert successful execution of the evaluation.
 
-  @expected-fail @test-53
+  @test-53
   Scenario: A.14.2. Conformance Test 53 /conf/arithmetic/test-data
     # ATS section: A.14.2
     # ATS id: /conf/arithmetic/test-data
@@ -32,7 +31,7 @@ Feature: A.14 Arithmetic Expressions abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-54
+  @test-54
   Scenario: A.14.3. Conformance Test 54 /conf/arithmetic/logical
     # ATS section: A.14.3
     # ATS id: /conf/arithmetic/logical

@@ -3,9 +3,8 @@
 @cql2-ats @case-insensitive-comparison
 Feature: A.5 Case-insensitive Comparison abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-15
+  @test-15
   Scenario: A.5.1. Conformance Test 15 /conf/case-insensitive-comparison/casei
     # ATS section: A.5.1
     # ATS id: /conf/case-insensitive-comparison/casei
@@ -21,7 +20,7 @@ Feature: A.5 Case-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable have no item in common;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-16
+  @test-16
   Scenario: A.5.2. Conformance Test 16 /conf/case-insensitive-comparison/casei-like
     # ATS section: A.5.2
     # ATS id: /conf/case-insensitive-comparison/casei-like
@@ -38,7 +37,7 @@ Feature: A.5 Case-insensitive Comparison abstract conformance tests
     And assert that the two result sets for each queryable are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-17
+  @test-17
   Scenario: A.5.3. Conformance Test 17 /conf/case-insensitive-comparison/test-data
     # ATS section: A.5.3
     # ATS id: /conf/case-insensitive-comparison/test-data
@@ -52,7 +51,7 @@ Feature: A.5 Case-insensitive Comparison abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-18
+  @test-18
   Scenario: A.5.4. Conformance Test 18 /conf/case-insensitive-comparison/logical
     # ATS section: A.5.4
     # ATS id: /conf/case-insensitive-comparison/logical

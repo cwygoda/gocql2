@@ -3,7 +3,6 @@
 @cql2-ats @cql2-json
 Feature: A.2 CQL2 JSON abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
   @test-3
   Scenario: A.2.1. Conformance Test 3 /conf/cql2-json/validate

@@ -3,9 +3,8 @@
 @cql2-ats @basic-cql2
 Feature: A.3 Basic CQL2 abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-4
+  @test-4
   Scenario: A.3.1. Conformance Test 4 /conf/basic-cql2/basic-test
     # ATS section: A.3.1
     # ATS id: /conf/basic-cql2/basic-test
@@ -19,7 +18,7 @@ Feature: A.3 Basic CQL2 abstract conformance tests
     And assert that the data type (String, Number, Integer, Boolean, Timestamp, Date, Interval, Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon, Geometry, GeometryCollection, or Array) is specified for each queryable;
     And assert that at least one queryable for each data source is of data type String, Boolean, Number, Integer, Timestamp or Date.
 
-  @expected-fail @test-5
+  @test-5
   Scenario: A.3.2. Conformance Test 5 /conf/basic-cql2/comparison
     # ATS section: A.3.2
     # ATS id: /conf/basic-cql2/comparison
@@ -49,7 +48,7 @@ Feature: A.3 Basic CQL2 abstract conformance tests
     And assert that the two result sets for each queryable for the operators < and >= have no item in common;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-6
+  @test-6
   Scenario: A.3.3. Conformance Test 6 /conf/basic-cql2/is-null
     # ATS section: A.3.3
     # ATS id: /conf/basic-cql2/is-null
@@ -66,7 +65,7 @@ Feature: A.3 Basic CQL2 abstract conformance tests
     And assert that the two result sets for each queryable have no item in common;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-7
+  @test-7
   Scenario: A.3.4. Conformance Test 7 /conf/basic-cql2/boolean
     # ATS section: A.3.4
     # ATS id: /conf/basic-cql2/boolean
@@ -83,7 +82,7 @@ Feature: A.3 Basic CQL2 abstract conformance tests
     And assert that the result sets for false are empty;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-8
+  @test-8
   Scenario: A.3.5. Conformance Test 8 /conf/basic-cql2/test-data
     # ATS section: A.3.5
     # ATS id: /conf/basic-cql2/test-data
@@ -97,7 +96,7 @@ Feature: A.3 Basic CQL2 abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-9
+  @test-9
   Scenario: A.3.6. Conformance Test 9 /conf/basic-cql2/logical
     # ATS section: A.3.6
     # ATS id: /conf/basic-cql2/logical

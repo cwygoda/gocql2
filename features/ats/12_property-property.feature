@@ -3,9 +3,8 @@
 @cql2-ats @property-property
 Feature: A.12 Property-Property Comparisons abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
-  @expected-fail @test-46
+  @test-46
   Scenario: A.12.1. Conformance Test 46 /conf/property-property/comparison-value-property
     # ATS section: A.12.1
     # ATS id: /conf/property-property/comparison-value-property
@@ -34,7 +33,7 @@ Feature: A.12 Property-Property Comparisons abstract conformance tests
     And assert that the two result sets for each queryable for the operators < and >= have no item in common;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-47
+  @test-47
   Scenario: A.12.2. Conformance Test 47 /conf/property-property/comparison-property-property
     # ATS section: A.12.2
     # ATS id: /conf/property-property/comparison-property-property
@@ -55,7 +54,7 @@ Feature: A.12 Property-Property Comparisons abstract conformance tests
     And assert that the result sets for each queryable for the operators = , >= and <= are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-48
+  @test-48
   Scenario: A.12.3. Conformance Test 48 /conf/property-property/comparison-value-value
     # ATS section: A.12.3
     # ATS id: /conf/property-property/comparison-value-value
@@ -83,7 +82,7 @@ Feature: A.12 Property-Property Comparisons abstract conformance tests
     And assert that the result sets for each queryable for the operators = , >= and <= are identical;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-49
+  @test-49
   Scenario: A.12.4. Conformance Test 49 /conf/property-property/test-data
     # ATS section: A.12.4
     # ATS id: /conf/property-property/test-data
@@ -97,7 +96,7 @@ Feature: A.12 Property-Property Comparisons abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-50
+  @test-50
   Scenario: A.12.5. Conformance Test 50 /conf/property-property/logical
     # ATS section: A.12.5
     # ATS id: /conf/property-property/logical

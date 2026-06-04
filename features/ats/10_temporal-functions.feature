@@ -3,7 +3,6 @@
 @cql2-ats @temporal-functions
 Feature: A.10 Temporal Functions abstract conformance tests
   The scenarios mirror the normative CQL2 Abstract Test Suite test methods directly.
-  The expected-fail tag marks ATS entries not yet covered by regular package tests.
 
   @test-40
   Scenario: A.10.1. Conformance Test 40 /conf/temporal-functions/temporal-functions-1
@@ -83,7 +82,7 @@ Feature: A.10 Temporal Functions abstract conformance tests
     Then assert successful execution of the evaluation;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-42
+  @test-42
   Scenario: A.10.3. Conformance Test 42 /conf/temporal-functions/test-data
     # ATS section: A.10.3
     # ATS id: /conf/temporal-functions/test-data
@@ -97,7 +96,7 @@ Feature: A.10 Temporal Functions abstract conformance tests
     And assert that the expected result is returned;
     And store the valid predicates for each data source.
 
-  @expected-fail @test-43
+  @test-43
   Scenario: A.10.4. Conformance Test 43 /conf/temporal-functions/logical
     # ATS section: A.10.4
     # ATS id: /conf/temporal-functions/logical
