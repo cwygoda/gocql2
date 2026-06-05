@@ -7,21 +7,21 @@ import (
 )
 
 func TestParseJSONSemanticPathErrors(t *testing.T) {
-	_, err := ParseJSON([]byte(`{"op":"and","args":[{"op":"=","args":[{"property":"name"},"a"]},{"op":"=","args":[{"property":123},"b"]}]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"and","args":[{"op":"=","args":[{"property":"name"},"a"]},{"op":"=","args":[{"property":123},"b"]}]}`))
 	assertParseErrorContains(t, err, "$.args[1].args[0].property")
 }
 
 func TestParseJSONSyntaxErrorLocation(t *testing.T) {
-	_, err := ParseJSON([]byte("{\n  ]"))
+	_, err := NewParser().ParseJSON([]byte("{\n  ]"))
 	assertParseErrorContains(t, err, "line 2, column 3")
 }
 
 func TestParseJSONNumericAlignment(t *testing.T) {
-	textExpr, err := ParseText(`value = 1.2300E2`)
+	textExpr, err := NewParser().ParseText(`value = 1.2300E2`)
 	if err != nil {
 		t.Fatalf("ParseText: %v", err)
 	}
-	jsonExpr, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"value"},123.00]}`))
+	jsonExpr, err := NewParser().ParseJSON([]byte(`{"op":"=","args":[{"property":"value"},123.00]}`))
 	if err != nil {
 		t.Fatalf("ParseJSON: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 		}
 	}
 
-	_, err := ParseJSON([]byte(`{"op":"a_containedby","args":[[],{"property":"tags"}]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"a_containedby","args":[[],{"property":"tags"}]}`))
 	assertParseErrorContains(t, err, `function "a_containedby" is not allowed`)
 
 	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString}).ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`))
@@ -191,7 +191,7 @@ func TestParseJSONIsNullOperands(t *testing.T) {
 		}
 	}
 
-	_, err := ParseJSON([]byte(`{"op":"isNull","args":[[]]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"isNull","args":[[]]}`))
 	assertParseErrorContains(t, err, "expected IS NULL operand")
 }
 
@@ -244,7 +244,7 @@ func TestParseJSONFunctionsAndArrays(t *testing.T) {
 }
 
 func TestParseJSONFunctionRegistry(t *testing.T) {
-	_, err := ParseJSON([]byte(`{"op":"my_func","args":[]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"my_func","args":[]}`))
 	assertParseErrorContains(t, err, `function "my_func" is not allowed`)
 
 	_, err = NewParser().WithAllowedFunctions(api.CaseIFunction()).ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"casei","args":[1]}]}`))
@@ -289,7 +289,7 @@ func TestParseJSONArithmetic(t *testing.T) {
 		t.Fatalf("right = %#v, want integer division", cmp.Right)
 	}
 
-	_, err = ParseJSON([]byte(`{"op":"+","args":[1]}`))
+	_, err = NewParser().ParseJSON([]byte(`{"op":"+","args":[1]}`))
 	assertParseErrorContains(t, err, `unsupported reserved operation "+"`)
 
 	_, err = NewParser().WithConformance(api.ConformanceArithmetic).ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"+","args":["a",1]}]}`))
@@ -305,29 +305,29 @@ func TestParseJSONDepthLimit(t *testing.T) {
 }
 
 func TestParseJSONRejectsInvalidExpressionLiterals(t *testing.T) {
-	_, err := ParseJSON([]byte(`"not a filter"`))
+	_, err := NewParser().ParseJSON([]byte(`"not a filter"`))
 	assertParseErrorContains(t, err, "expected CQL2 expression object or boolean")
 
-	_, err = ParseJSON([]byte(`1`))
+	_, err = NewParser().ParseJSON([]byte(`1`))
 	assertParseErrorContains(t, err, "expected CQL2 expression object or boolean")
 }
 
 func TestParseJSONRejectsReservedScalarFunctions(t *testing.T) {
-	_, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"=","args":[1,2]}]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"=","args":[{"property":"x"},{"op":"=","args":[1,2]}]}`))
 	assertParseErrorContains(t, err, `reserved operation "="`)
 }
 
 func TestParseJSONArgumentCounts(t *testing.T) {
-	_, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"name"}]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"=","args":[{"property":"name"}]}`))
 	assertParseErrorContains(t, err, "expected exactly 2 arguments")
 
-	_, err = ParseJSON([]byte(`{"args":[]}`))
+	_, err = NewParser().ParseJSON([]byte(`{"args":[]}`))
 	assertParseErrorContains(t, err, "$.op")
 
-	_, err = ParseJSON([]byte(`{"op":"my_func"}`))
+	_, err = NewParser().ParseJSON([]byte(`{"op":"my_func"}`))
 	assertParseErrorContains(t, err, "$.args")
 
-	_, err = ParseJSON([]byte(`{"op":"my_func","args":null}`))
+	_, err = NewParser().ParseJSON([]byte(`{"op":"my_func","args":null}`))
 	assertParseErrorContains(t, err, "expected array")
 }
 

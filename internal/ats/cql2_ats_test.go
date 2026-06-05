@@ -267,13 +267,13 @@ func cql2AbstractTestFromScenario(sc *godog.Scenario) cql2AbstractTest {
 
 func (s *cql2ATSSuite) iParseTheCQL2TextFilter(filter string) error {
 	s.executedByStep = true
-	s.parsed, s.parseErr = gocql2.ParseText(filter)
+	s.parsed, s.parseErr = gocql2.NewParser().ParseText(filter)
 	return nil
 }
 
 func (s *cql2ATSSuite) iParseTheCQL2JSONFilter(doc *godog.DocString) error {
 	s.executedByStep = true
-	s.parsed, s.parseErr = gocql2.ParseJSON([]byte(doc.Content))
+	s.parsed, s.parseErr = gocql2.NewParser().ParseJSON([]byte(doc.Content))
 	return nil
 }
 

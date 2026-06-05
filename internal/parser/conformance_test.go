@@ -44,13 +44,13 @@ func TestDefaultParserRejectsOptionalConformanceSyntax(t *testing.T) {
 		{input: `A_CONTAINS(tags, ('foo'))`, want: `array-functions`},
 	}
 	for _, tc := range cases {
-		_, err := ParseText(tc.input)
+		_, err := NewParser().ParseText(tc.input)
 		assertParseErrorContains(t, err, tc.want)
 	}
 
-	_, err := ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},"A%"]}`))
+	_, err := NewParser().ParseJSON([]byte(`{"op":"like","args":[{"property":"name"},"A%"]}`))
 	assertParseErrorContains(t, err, `advanced-comparison-operators`)
-	_, err = ParseJSON([]byte(`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[1,2]}]}`))
+	_, err = NewParser().ParseJSON([]byte(`{"op":"s_intersects","args":[{"property":"geom"},{"type":"Point","coordinates":[1,2]}]}`))
 	assertParseErrorContains(t, err, `spatial conformance`)
 }
 

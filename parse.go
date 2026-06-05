@@ -21,28 +21,11 @@ func (p *Parser) WithMaxDepth(n int) *Parser {
 	return p
 }
 
-// WithSupportedProperties records the parser's advertised property set and
-// restricts parsing to that allow-list. Properties are treated as untyped; use
-// WithAllowedProperties when type validation is needed.
-func (p *Parser) WithSupportedProperties(names ...string) *Parser {
-	p.inner.WithSupportedProperties(names...)
-	return p
-}
-
 // WithAllowedProperties configures a fail-closed property registry. Any property
 // reference not present in the registry is rejected, and registered types are
 // used to validate character, numeric, comparison, and IN-list contexts.
 func (p *Parser) WithAllowedProperties(defs ...api.PropertyDefinition) *Parser {
 	p.inner.WithAllowedProperties(defs...)
-	return p
-}
-
-// WithSupportedFunctions adds names to the fail-closed name-only function
-// registry. Registered functions accept any number of arguments of any type and
-// have an unknown return type. Use WithAllowedFunctions when signature
-// validation is needed.
-func (p *Parser) WithSupportedFunctions(names ...string) *Parser {
-	p.inner.WithSupportedFunctions(names...)
 	return p
 }
 
@@ -68,8 +51,8 @@ func (p *Parser) WithConformanceClasses(classes ...string) *Parser {
 // or class slugs such as "case-insensitive-comparison".
 //
 // The Functions conformance class does not define any concrete function names;
-// combine it with WithAllowedFunctions or WithSupportedFunctions to advertise
-// implementation-specific functions.
+// combine it with WithAllowedFunctions to advertise implementation-specific
+// functions.
 func (p *Parser) WithConformance(classes ...string) *Parser {
 	p.inner.WithConformance(classes...)
 	return p
@@ -104,18 +87,3 @@ func (p *Parser) ParseText(input string) (api.Expression, error) { return p.inne
 
 // ParseJSON parses CQL2 JSON into an AST.
 func (p *Parser) ParseJSON(input []byte) (api.Expression, error) { return p.inner.ParseJSON(input) }
-
-// Parse parses input in the requested CQL2 language.
-func Parse(input []byte, lang api.Language) (api.Expression, error) {
-	return NewParser().Parse(input, lang)
-}
-
-// ParseText parses CQL2 Text into an AST.
-func ParseText(input string) (api.Expression, error) {
-	return NewParser().ParseText(input)
-}
-
-// ParseJSON parses CQL2 JSON into an AST.
-func ParseJSON(input []byte) (api.Expression, error) {
-	return NewParser().ParseJSON(input)
-}
