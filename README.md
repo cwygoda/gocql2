@@ -43,8 +43,8 @@ func main() {
 }
 ```
 
-For one-off parsing without schema validation, use `gocql2.ParseText`, `gocql2.ParseJSON`, or
-`gocql2.Parse`.
+For parsing without schema validation, still create an explicit parser with
+`gocql2.NewParser()` and then call `ParseText`, `ParseJSON`, or `Parse`.
 
 ## Parse CQL2 JSON
 
@@ -127,9 +127,7 @@ A reusable parser can be configured before concurrent use:
 
 - `WithAllowedProperties` rejects unknown properties and validates property types in scalar,
   comparison, temporal, spatial, array, and function contexts.
-- `WithSupportedProperties` advertises a property allow-list without type validation.
 - `WithAllowedFunctions` rejects unknown functions and validates function signatures.
-- `WithSupportedFunctions` advertises function names without signature validation.
 - `WithConformance` records CQL2 conformance classes and enables standard CQL2 functions implied
   by those classes, such as `CASEI`, spatial predicates, temporal predicates, and array predicates.
 - `WithMaxDepth` limits recursive parse depth for defensive parsing.
@@ -151,7 +149,7 @@ Parser errors are returned as `*api.ParseError` and include source language plus
 position or JSON path information.
 
 ```go
-_, err := gocql2.ParseText("name =")
+_, err := gocql2.NewParser().ParseText("name =")
 if err != nil {
     var parseErr *api.ParseError
     if errors.As(err, &parseErr) {

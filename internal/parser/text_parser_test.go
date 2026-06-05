@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseTextComparisonsAndLogicalPrecedence(t *testing.T) {
-	expr, err := ParseText(`a = 1 OR b = 2 AND NOT c = 3`)
+	expr, err := NewParser().ParseText(`a = 1 OR b = 2 AND NOT c = 3`)
 	if err != nil {
 		t.Fatalf("ParseText: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestParseTextEscapedQuotes(t *testing.T) {
 		`name = 'O\'Brien'`: "O'Brien",
 	}
 	for input, want := range cases {
-		expr, err := ParseText(input)
+		expr, err := NewParser().ParseText(input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", input, err)
 		}
@@ -50,13 +50,13 @@ func TestParseTextEscapedQuotes(t *testing.T) {
 }
 
 func TestParseTextReservedKeywords(t *testing.T) {
-	_, err := ParseText(`AND = 1`)
+	_, err := NewParser().ParseText(`AND = 1`)
 	assertParseErrorContains(t, err, `reserved keyword "AND"`)
 
-	_, err = ParseText(`AND()`)
+	_, err = NewParser().ParseText(`AND()`)
 	assertParseErrorContains(t, err, `reserved keyword "AND"`)
 
-	expr, err := ParseText(`"AND" = 1`)
+	expr, err := NewParser().ParseText(`"AND" = 1`)
 	if err != nil {
 		t.Fatalf("quoted reserved property failed: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestParseTextIdentifierGrammar(t *testing.T) {
 		{input: "\"a.b\u0301\u2040c\" = 1", want: "a.b\u0301\u2040c"},
 	}
 	for _, tc := range cases {
-		expr, err := ParseText(tc.input)
+		expr, err := NewParser().ParseText(tc.input)
 		if err != nil {
 			t.Fatalf("ParseText(%q): %v", tc.input, err)
 		}
@@ -115,21 +115,21 @@ func TestParseTextRejectsInvalidQuotedIdentifiers(t *testing.T) {
 		`"a/b" = 1`:       "invalid quoted identifier character",
 	}
 	for input, want := range cases {
-		_, err := ParseText(input)
+		_, err := NewParser().ParseText(input)
 		assertParseErrorContains(t, err, want)
 	}
 }
 
 func TestParseTextLocations(t *testing.T) {
-	_, err := ParseText("name =\n  AND")
+	_, err := NewParser().ParseText("name =\n  AND")
 	assertParseErrorContains(t, err, "line 2, column 3")
 }
 
 func TestParseTextRejectsNonBooleanPrimary(t *testing.T) {
-	_, err := ParseText(`'not a filter'`)
+	_, err := NewParser().ParseText(`'not a filter'`)
 	assertParseErrorContains(t, err, "expected predicate operator")
 
-	_, err = ParseText(`1`)
+	_, err = NewParser().ParseText(`1`)
 	assertParseErrorContains(t, err, "expected predicate operator")
 }
 
@@ -391,7 +391,7 @@ func TestParseTextFunctionRegistry(t *testing.T) {
 		t.Fatalf("expr = %T, want api.ComparisonExpression", expr)
 	}
 
-	_, err = ParseText(`custom(name, 1)`)
+	_, err = NewParser().ParseText(`custom(name, 1)`)
 	assertParseErrorContains(t, err, `function "custom" is not allowed`)
 
 	_, err = NewParser().WithAllowedFunctions(api.CaseIFunction()).ParseText(`CASEI(1) = '1'`)

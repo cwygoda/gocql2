@@ -39,7 +39,7 @@ func TestToSQLScalarsAndPropertyAliases(t *testing.T) {
 }
 
 func TestToSQLFailsClosedForUnmappedProperties(t *testing.T) {
-	expr, err := gocql2.ParseText("name = 'x'")
+	expr, err := gocql2.NewParser().ParseText("name = 'x'")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestToSQLFailsClosedForUnmappedProperties(t *testing.T) {
 }
 
 func TestToSQLDefaultColumnMapping(t *testing.T) {
-	expr, err := gocql2.ParseText("name = 'x'")
+	expr, err := gocql2.NewParser().ParseText("name = 'x'")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestToSQLDefaultColumnMapping(t *testing.T) {
 }
 
 func TestToSQLDefaultColumnMappingDoesNotHideResolverErrors(t *testing.T) {
-	expr, err := gocql2.ParseText("name = 'x'")
+	expr, err := gocql2.NewParser().ParseText("name = 'x'")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestToSQLDefaultColumnMappingDoesNotHideResolverErrors(t *testing.T) {
 }
 
 func TestToSQLDefaultColumnMappingFallsBackOnlyForUnmappedProperties(t *testing.T) {
-	expr, err := gocql2.ParseText("name = 'x'")
+	expr, err := gocql2.NewParser().ParseText("name = 'x'")
 	if err != nil {
 		t.Fatal(err)
 	}

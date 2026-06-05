@@ -131,13 +131,13 @@ func TestParseJSONTemporalInstanceRequiresExactlyOneKind(t *testing.T) {
 }
 
 func TestTimestampRequiresUTC(t *testing.T) {
-	_, err := ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`)
+	_, err := NewParser().ParseText(`event_time = TIMESTAMP('2022-04-24T09:59:57+02:00')`)
 	assertParseErrorContains(t, err, "ending in Z")
 
-	_, err = ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T09:59:57+02:00"}]}`))
+	_, err = NewParser().ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T09:59:57+02:00"}]}`))
 	assertParseErrorContains(t, err, "ending in Z")
 
-	if _, err := ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`)); err != nil {
+	if _, err := NewParser().ParseJSON([]byte(`{"op":"=","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`)); err != nil {
 		t.Fatalf("UTC Z timestamp should parse: %v", err)
 	}
 }

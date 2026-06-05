@@ -8,8 +8,8 @@ import "github.com/cwygoda/cql2/api"
 // or class slugs such as "case-insensitive-comparison".
 //
 // The Functions conformance class does not define any concrete function names;
-// combine it with WithAllowedFunctions or WithSupportedFunctions to advertise
-// implementation-specific functions.
+// combine it with WithAllowedFunctions to advertise implementation-specific
+// functions.
 func (p *Parser) WithConformance(classes ...string) *Parser {
 	canonical := api.CanonicalConformanceClasses(classes...)
 	p.conformanceClasses = canonical

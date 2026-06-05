@@ -266,22 +266,6 @@ func functionNames(defs []api.FunctionDefinition) []string {
 	return names
 }
 
-func allowedAnyFunctions(names []string) []api.FunctionDefinition {
-	defs := make([]api.FunctionDefinition, 0, len(names))
-	for _, name := range names {
-		name = normalizeFunctionName(name)
-		if name == "" {
-			continue
-		}
-		defs = append(defs, api.FunctionDefinition{
-			Name:    name,
-			Args:    []api.FunctionArgument{{Types: []api.FunctionType{api.FunctionTypeAny}, Variadic: true}},
-			Returns: []api.FunctionType{api.FunctionTypeAny},
-		})
-	}
-	return defs
-}
-
 func cloneFunctionDefinitions(defs map[string]api.FunctionDefinition) []api.FunctionDefinition {
 	if len(defs) == 0 {
 		return nil
