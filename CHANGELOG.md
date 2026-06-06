@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.9.1 - 2026-06-06
+#### Bug Fixes
+- align module path with repo - (271f3f0) - Christian Wygoda
+#### Documentation
+- enforce markdown line length - (dafbced) - Christian Wygoda
+- rewrite README for users - (f91459c) - Christian Wygoda
+#### Refactoring
+- require explicit parser setup - (08b6764) - Christian Wygoda
+
+- - -
+
 ## v0.9.0 - 2026-06-04
 #### Features
 - make parser setup chainable - (18eb5cf) - Christian Wygoda
