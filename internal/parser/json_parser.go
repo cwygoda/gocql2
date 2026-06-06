@@ -151,6 +151,9 @@ func parseJSONExpression(raw json.RawMessage, path api.JSONPath, depth int, cfg 
 		if err != nil {
 			return nil, err
 		}
+		if negated, ok := negateJSONPredicateExpression(expr, src); ok {
+			return negated, nil
+		}
 		return &api.LogicalExpression{Op: api.LogicalNot, Args: []api.Expression{expr}, Src: src}, nil
 	case "=", "<>", "<", ">", "<=", ">=":
 		args, err := parseJSONScalarArgs(op.Args, path.Key("args"), depth, cfg, 2, 2)
@@ -248,6 +251,41 @@ func parseJSONExpression(raw json.RawMessage, path api.JSONPath, depth int, cfg 
 			return nil, jsonPathError(path.Key("op"), fmt.Sprintf("function %q does not return boolean", fn.Name))
 		}
 		return fn, nil
+	}
+}
+
+func negateJSONPredicateExpression(expr api.Expression, src api.Span) (api.Expression, bool) {
+	switch value := expr.(type) {
+	case *api.LikeExpression:
+		if value.Not {
+			return nil, false
+		}
+		value.Not = true
+		value.Src = src
+		return value, true
+	case *api.BetweenExpression:
+		if value.Not {
+			return nil, false
+		}
+		value.Not = true
+		value.Src = src
+		return value, true
+	case *api.InExpression:
+		if value.Not {
+			return nil, false
+		}
+		value.Not = true
+		value.Src = src
+		return value, true
+	case *api.IsNullExpression:
+		if value.Not {
+			return nil, false
+		}
+		value.Not = true
+		value.Src = src
+		return value, true
+	default:
+		return nil, false
 	}
 }
 

@@ -63,6 +63,16 @@ expr, err := gocql2.NewParser().
     }`))
 ```
 
+## Serialize CQL2
+
+Parsed ASTs can be serialized back to CQL2 Text or CQL2 JSON. Output is canonicalized for safe
+round-tripping; it is structurally equivalent, not byte-for-byte identical to the original input.
+
+```go
+text, err := gocql2.SerializeText(expr)
+jsonBytes, err := gocql2.SerializeJSON(expr)
+```
+
 ## Compile CQL2 to SQL
 
 The `sql` package turns a parsed AST into a parameterized SQL expression. Property mappings are
