@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 func TestParseTextSpatialPredicates(t *testing.T) {

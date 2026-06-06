@@ -1,6 +1,6 @@
 package parser
 
-import "github.com/cwygoda/cql2/api"
+import "github.com/cwygoda/gocql2/api"
 
 // WithConformance records CQL2 conformance classes and configures the standard
 // functions required by those classes. Arguments may be api conformance

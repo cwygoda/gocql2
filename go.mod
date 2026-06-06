@@ -1,4 +1,4 @@
-module github.com/cwygoda/cql2
+module github.com/cwygoda/gocql2
 
 go 1.25.0
 

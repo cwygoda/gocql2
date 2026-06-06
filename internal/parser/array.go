@@ -3,7 +3,7 @@ package parser
 import (
 	"strings"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 var arrayPredicateOps = map[string]api.ArrayPredicateOp{

@@ -10,16 +10,16 @@ import (
 	"testing"
 	"time"
 
-	gocql2 "github.com/cwygoda/cql2"
+	gocql2 "github.com/cwygoda/gocql2"
 
-	cql2sql "github.com/cwygoda/cql2/sql"
+	cql2sql "github.com/cwygoda/gocql2/sql"
 
 	"github.com/cucumber/godog"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 type cql2AbstractTest struct {

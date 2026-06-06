@@ -80,11 +80,11 @@ formatters:
 
   settings:
     gofumpt:
-      module-path: github.com/cwygoda/cql2
+      module-path: github.com/cwygoda/gocql2
       extra-rules: true
     goimports:
       local-prefixes:
-        - github.com/cwygoda/cql2
+        - github.com/cwygoda/gocql2
 
   exclusions:
     generated: strict

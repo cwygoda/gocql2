@@ -1,8 +1,8 @@
 package gocql2
 
 import (
-	"github.com/cwygoda/cql2/api"
-	"github.com/cwygoda/cql2/internal/parser"
+	"github.com/cwygoda/gocql2/api"
+	"github.com/cwygoda/gocql2/internal/parser"
 )
 
 // Parser parses CQL2 and exposes the capabilities it was configured with.

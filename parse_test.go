@@ -3,7 +3,7 @@ package gocql2
 import (
 	"testing"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 func TestRootParserFacade(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 var comparisonOps = map[string]api.ComparisonOp{

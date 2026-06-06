@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 // SQL is a parameterized SQL fragment generated from a CQL2 expression.
