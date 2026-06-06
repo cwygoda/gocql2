@@ -72,14 +72,26 @@ jobs:
         id: tests
         run: gotestsum --junitfile junit.xml -- -race -coverprofile=coverage.out ./...
 
+      - name: Preload Codecov verification key
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == 'stable'
+        # codecov-action v6 currently fetches the CLI from cli.codecov.io but its
+        # GPG key import can intermittently fail; seed the official key first.
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl --fail --show-error --location https://uploader.codecov.io/verification.gpg | gpg --batch --import
+          gpg --batch --fingerprint 27034E7FDB850E0BBC2C62FF806BB28AED779869
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6.0.1
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == 'stable'
+        # Codecov is reporting-only; keep PR and release gates owned by tests.
+        continue-on-error: true
         with:
           files: ./coverage.out
           flags: go
           name: go-${{ matrix.go-version }}-${{ matrix.os }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           use_oidc: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
       - name: Upload coverage artifact
