@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 const propertyTypeUnsupported api.PropertyType = "\x00unsupported"

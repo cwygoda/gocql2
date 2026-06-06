@@ -12,7 +12,7 @@ datastore.
 ## Install
 
 ```sh
-go get github.com/cwygoda/cql2
+go get github.com/cwygoda/gocql2
 ```
 
 ## Quick start: parse CQL2 Text
@@ -24,8 +24,8 @@ import (
     "fmt"
     "log"
 
-    gocql2 "github.com/cwygoda/cql2"
-    "github.com/cwygoda/cql2/api"
+    gocql2 "github.com/cwygoda/gocql2"
+    "github.com/cwygoda/gocql2/api"
 )
 
 func main() {
@@ -76,9 +76,9 @@ import (
     "fmt"
     "log"
 
-    gocql2 "github.com/cwygoda/cql2"
-    "github.com/cwygoda/cql2/api"
-    cql2sql "github.com/cwygoda/cql2/sql"
+    gocql2 "github.com/cwygoda/gocql2"
+    "github.com/cwygoda/gocql2/api"
+    cql2sql "github.com/cwygoda/gocql2/sql"
 )
 
 func main() {

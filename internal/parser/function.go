@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 const functionTypeUnsupported api.FunctionType = "\x00unsupported"

@@ -3,7 +3,7 @@ package ats
 import (
 	"testing"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 // atsFixture is a dialect-neutral dataset for exercising the CQL2 Abstract Test

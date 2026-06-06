@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	gocql2 "github.com/cwygoda/cql2"
+	gocql2 "github.com/cwygoda/gocql2"
 
-	cql2sql "github.com/cwygoda/cql2/sql"
+	cql2sql "github.com/cwygoda/gocql2/sql"
 
-	"github.com/cwygoda/cql2/api"
+	"github.com/cwygoda/gocql2/api"
 )
 
 func TestToSQLScalarsAndPropertyAliases(t *testing.T) {
