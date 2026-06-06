@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.0 - 2026-06-06
+#### Features
+- add CQL2 serialization - (55e9b11) - Christian Wygoda
+#### Continuous Integration
+- stop Codecov upload failures from blocking - (71c910c) - Christian Wygoda
+- upgrade GitHub Actions - (ebe6491) - Christian Wygoda
+
+- - -
+
 ## v0.9.1 - 2026-06-06
 #### Bug Fixes
 - align module path with repo - (271f3f0) - Christian Wygoda
