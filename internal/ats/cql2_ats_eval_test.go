@@ -67,6 +67,16 @@ type atsStoredPredicate struct {
 	IDs    []string
 }
 
+type atsTemporalLoop struct {
+	typ  api.PropertyType
+	pair bool
+}
+
+type atsTemporalFilter struct {
+	filter    string
+	queryable string
+}
+
 func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 	switch s.current.ID {
 	case basicTestATSID,
@@ -103,7 +113,10 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 		propertyPropertyTestDataATSID,
 		propertyPropertyLogicalATSID,
 		functionsATSID,
+		arrayPredicateATSID,
 		arrayLogicalATSID,
+		temporalFunctions1ATSID,
+		temporalFunctions2ATSID,
 		arithmeticATSID,
 		arithmeticTestDataATSID,
 		arithmeticLogicalATSID:
@@ -884,6 +897,84 @@ func atsPatternKey(filter string) string {
 		return filter
 	}
 	return strings.ReplaceAll(matches[len(matches)-1][1], `\\`, `\`)
+}
+
+func atsFunctionName(filter string) string {
+	open := strings.IndexByte(filter, '(')
+	if open == -1 {
+		return filter
+	}
+	return strings.ToUpper(strings.TrimSpace(filter[:open]))
+}
+
+func atsNormalizeArrayPredicateFixtureLiterals(filter string) string {
+	replacer := strings.NewReplacer(`"foo"`, `'foo'`, `"bar"`, `'bar'`)
+	return replacer.Replace(filter)
+}
+
+func atsTemporalPropertyType(name string) (api.PropertyType, error) {
+	switch name {
+	case "Timestamp":
+		return api.PropertyTypeTimestamp, nil
+	case "Date":
+		return api.PropertyTypeDate, nil
+	default:
+		return api.PropertyTypeAny, fmt.Errorf("unsupported temporal ATS data type %q", name)
+	}
+}
+
+func atsTemporalFiltersForLoop(loop atsTemporalLoop, template string) ([]atsTemporalFilter, error) {
+	if loop.typ == api.PropertyTypeAny {
+		return nil, fmt.Errorf("temporal predicate %q has no active temporal queryable loop", template)
+	}
+	if loop.pair {
+		start, end, err := atsTemporalPairQueryables(loop.typ)
+		if err != nil {
+			return nil, err
+		}
+		filter := strings.ReplaceAll(template, "{queryable1}", start)
+		filter = strings.ReplaceAll(filter, "{queryable2}", end)
+		return []atsTemporalFilter{{filter: filter, queryable: start + ":" + end}}, nil
+	}
+
+	queryables := atsTemporalQueryableNames(loop.typ)
+	if len(queryables) == 0 {
+		return nil, fmt.Errorf("ATS fixture has no %s queryables for temporal predicate %q", loop.typ, template)
+	}
+	filters := make([]atsTemporalFilter, 0, len(queryables))
+	for _, queryable := range queryables {
+		filters = append(filters, atsTemporalFilter{
+			filter:    strings.ReplaceAll(template, "{queryable}", queryable),
+			queryable: queryable,
+		})
+	}
+	return filters, nil
+}
+
+func atsTemporalQueryableNames(typ api.PropertyType) []string {
+	queryables := atsFixtureQueryablesOfTypes(typ)
+	names := make([]string, 0, len(queryables))
+	for _, queryable := range queryables {
+		names = append(names, queryable.Name)
+	}
+	return names
+}
+
+func atsTemporalPairQueryables(typ api.PropertyType) (string, string, error) {
+	var start, end string
+	switch typ {
+	case api.PropertyTypeTimestamp:
+		start, end = "record_start", "record_end"
+	case api.PropertyTypeDate:
+		start, end = "source_start", "source_end"
+	default:
+		return "", "", fmt.Errorf("unsupported temporal pair type %q", typ)
+	}
+	queryables := atsFixtureQueryablesByName()
+	if queryables[start].Type != typ || queryables[end].Type != typ {
+		return "", "", fmt.Errorf("ATS fixture is missing %s temporal interval pair %q/%q", typ, start, end)
+	}
+	return start, end, nil
 }
 
 func atsPredicateCombinations(predicates []atsStoredPredicate, limit int) [][]atsStoredPredicate {

@@ -44,6 +44,7 @@ type cql2ATSSuite struct {
 	spatialParseErrs   []error
 	spatialFilters     []string
 	spatialEvaluations []atsEvaluation
+	temporalLoop       atsTemporalLoop
 
 	parseAttempts       int
 	fixtureEvaluations  int
@@ -161,6 +162,7 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 		s.spatialParseErrs = nil
 		s.spatialFilters = nil
 		s.spatialEvaluations = nil
+		s.temporalLoop = atsTemporalLoop{}
 		s.parseAttempts = 0
 		s.fixtureEvaluations = 0
 		s.resultAssertions = 0
@@ -262,10 +264,8 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least one queryable of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least two queryables of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
-	ctx.Step(`^For each queryable \{queryable\} of data type Timestamp, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
-	ctx.Step(`^For each queryable \{queryable\} of data type Date, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
-	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type Timestamp, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
-	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type Date, evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^For each queryable \{queryable\} of data type (Timestamp|Date), evaluate the following filter expressions$`, s.forEachTemporalQueryableEvaluateFilters)
+	ctx.Step(`^For each pair of queryables \{queryable2\} and \{queryable2\} of data type (Timestamp|Date), evaluate the following filter expressions$`, s.forEachTemporalQueryablePairEvaluateFilters)
 	ctx.Step(`^(T_(?:AFTER|BEFORE|CONTAINS|DISJOINT|DURING|EQUALS|FINISHEDBY|FINISHES|INTERSECTS|MEETS|METBY|OVERLAPPEDBY|OVERLAPS|STARTEDBY|STARTS)\(.+\))$`, s.iEvaluateTheTemporalPredicateTemplate)
 
 	ctx.Step(`^store the valid predicates for each data source\.$`, s.storeTheValidPredicatesForEachDataSource)
@@ -335,7 +335,7 @@ func (s *cql2ATSSuite) isTemporalFunctionsATS() bool {
 }
 
 func (s *cql2ATSSuite) isParserOnlyATS() bool {
-	return s.isArrayPredicateATS() || s.isTemporalFunctionsATS()
+	return false
 }
 
 func (s *cql2ATSSuite) isSpatialATS() bool {
@@ -369,12 +369,9 @@ func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "tags")
-	s.parseAttempts++
-	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
-		api.PropertyDefinition{Name: "foo", Type: api.PropertyTypeString},
-		api.PropertyDefinition{Name: "bar", Type: api.PropertyTypeString}).ParseText(filter)
-
-	return s.parseErr
+	filter = atsNormalizeArrayPredicateFixtureLiterals(filter)
+	s.recordATSEvaluation(filter, "tags", atsFunctionName(filter), nil)
+	return nil
 }
 
 func (s *cql2ATSSuite) atLeastOneQueryableHasGeometryDataType() error {
@@ -420,27 +417,45 @@ func (s *cql2ATSSuite) oneOrMoreDataSourcesWithTemporalQueryable() error {
 	return nil
 }
 
-func (s *cql2ATSSuite) forEachTemporalQueryableEvaluateFilters() error {
-	if s.isTemporalFunctionsATS() {
-		s.executedByStep = true
-	}
-	return nil
-}
-
-func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(filter string) error {
+func (s *cql2ATSSuite) forEachTemporalQueryableEvaluateFilters(typ string) error {
 	if !s.isTemporalFunctionsATS() {
 		return nil
 	}
 	s.executedByStep = true
-	filter = strings.ReplaceAll(filter, "{queryable1}", "start_time")
-	filter = strings.ReplaceAll(filter, "{queryable2}", "end_time")
-	filter = strings.ReplaceAll(filter, "{queryable}", "event_time")
-	s.parseAttempts++
-	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceTemporalFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "event_time", Type: api.PropertyTypeAny},
-		api.PropertyDefinition{Name: "start_time", Type: api.PropertyTypeAny},
-		api.PropertyDefinition{Name: "end_time", Type: api.PropertyTypeAny}).ParseText(filter)
+	temporalType, err := atsTemporalPropertyType(typ)
+	if err != nil {
+		return err
+	}
+	s.temporalLoop = atsTemporalLoop{typ: temporalType}
+	return nil
+}
 
-	return s.parseErr
+func (s *cql2ATSSuite) forEachTemporalQueryablePairEvaluateFilters(typ string) error {
+	if !s.isTemporalFunctionsATS() {
+		return nil
+	}
+	s.executedByStep = true
+	temporalType, err := atsTemporalPropertyType(typ)
+	if err != nil {
+		return err
+	}
+	s.temporalLoop = atsTemporalLoop{typ: temporalType, pair: true}
+	return nil
+}
+
+func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(template string) error {
+	if !s.isTemporalFunctionsATS() {
+		return nil
+	}
+	s.executedByStep = true
+	filters, err := atsTemporalFiltersForLoop(s.temporalLoop, template)
+	if err != nil {
+		return err
+	}
+	for _, filter := range filters {
+		s.recordATSEvaluation(filter.filter, filter.queryable, atsFunctionName(filter.filter), nil)
+	}
+	return nil
 }
 
 func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
