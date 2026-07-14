@@ -161,6 +161,7 @@ func (s *cql2ATSSuite) theStoredPredicatesForEachDataSource() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	if len(s.storedATSPredicates) < 4 {
 		return fmt.Errorf("need at least four stored ATS predicates, got %d", len(s.storedATSPredicates))
 	}
@@ -172,6 +173,7 @@ func (s *cql2ATSSuite) assertAtLeastOneQueryableForEachDataSource() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	if len(atsFixture.Queryables) == 0 {
 		return fmt.Errorf("ATS fixture data source %q has no queryables", atsFixture.Name)
 	}
@@ -183,6 +185,7 @@ func (s *cql2ATSSuite) assertDataTypeSpecifiedForEachQueryable() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	for _, queryable := range atsFixture.Queryables {
 		if queryable.Type == api.PropertyTypeAny {
 			return fmt.Errorf("queryable %q has no data type", queryable.Name)
@@ -196,6 +199,7 @@ func (s *cql2ATSSuite) assertAtLeastOneScalarQueryable() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	if len(atsFixtureQueryablesOfTypes(api.PropertyTypeString, api.PropertyTypeBoolean, api.PropertyTypeNumber, api.PropertyTypeInteger, api.PropertyTypeTimestamp, api.PropertyTypeDate)) == 0 {
 		return fmt.Errorf("ATS fixture data source %q has no scalar queryable", atsFixture.Name)
 	}
@@ -261,6 +265,7 @@ func (s *cql2ATSSuite) atLeastOneQueryableHasNumericDataType() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	if len(atsFixtureQueryablesOfTypes(api.PropertyTypeNumber, api.PropertyTypeInteger)) == 0 {
 		return fmt.Errorf("ATS fixture data source %q has no numeric queryable", atsFixture.Name)
 	}
@@ -291,6 +296,9 @@ func (s *cql2ATSSuite) theListOfFunctionsWithArgumentsAndReturnTypeSupportedByTh
 		return nil
 	}
 	s.executedByStep = true
+	if len(atsFunctionFilters(s.atsParser.SupportedFunctionDefinitions())) == 0 {
+		return fmt.Errorf("no supported ATS functions can be rendered against the fixture")
+	}
 	return nil
 }
 
@@ -299,7 +307,42 @@ func (s *cql2ATSSuite) forEachFunctionConstructMultipleValidFilterExpressions() 
 		return nil
 	}
 	s.executedByStep = true
+	filters := atsFunctionFilters(s.atsParser.SupportedFunctionDefinitions())
+	if len(filters) == 0 {
+		return fmt.Errorf("no valid ATS function filters generated from supported function metadata")
+	}
+	for _, filter := range filters {
+		s.recordATSEvaluation(filter, atsFixture.Name, filter, nil)
+	}
 	return nil
+}
+
+// The functions ATS scenario is abstract: the feature file asks the IUT to
+// construct predicates from its advertised function list rather than providing
+// concrete predicate rows. Generate only fixture-backed filters for supported
+// functions the PostGIS dialect can render, and fail above if none are available.
+func atsFunctionFilters(defs []api.FunctionDefinition) []string {
+	filters := []string{}
+	for _, def := range defs {
+		switch strings.ToLower(def.Name) {
+		case api.FunctionNameCaseI:
+			filters = append(filters, atsUnaryTextFunctionFilters("CASEI", "name_ascii", "munich", "m%")...)
+		case api.FunctionNameAccenti:
+			filters = append(filters, atsUnaryTextFunctionFilters("ACCENTI", "name", "Lodz", "A%")...)
+		}
+	}
+	return filters
+}
+
+func atsUnaryTextFunctionFilters(functionName, queryable, value, pattern string) []string {
+	callOnQueryable := fmt.Sprintf("%s(%s)", functionName, queryable)
+	callOnValue := fmt.Sprintf("%s('%s')", functionName, value)
+	callOnPattern := fmt.Sprintf("%s('%s')", functionName, pattern)
+	return []string{
+		fmt.Sprintf("%s = %s", callOnQueryable, callOnValue),
+		fmt.Sprintf("%s <> %s", callOnQueryable, callOnValue),
+		fmt.Sprintf("%s LIKE %s", callOnQueryable, callOnPattern),
+	}
 }
 
 func (s *cql2ATSSuite) evaluateQueryableValueComparisonTemplate(template string) error {
@@ -481,6 +524,10 @@ func (s *cql2ATSSuite) evaluateSpecificStoredPredicateCombination(template strin
 	}
 	s.executedByStep = true
 	combinations := atsPredicateCombinations(s.storedATSPredicates, 10)
+	if len(combinations) < 10 {
+		return fmt.Errorf("logical ATS scenario recorded %d combinations, want at least 10", len(combinations))
+	}
+	s.logicalCombinations = len(combinations)
 	for _, combo := range combinations {
 		filter := template
 		for i, predicate := range combo {
@@ -494,12 +541,18 @@ func (s *cql2ATSSuite) evaluateSpecificStoredPredicateCombination(template strin
 
 func (s *cql2ATSSuite) assertSuccessfulATSEvaluation() error {
 	if !s.isImplementedScalarATS() {
-		if (s.isSpatialATS() || s.isArrayPredicateATS() || s.isTemporalFunctionsATS()) && len(s.spatialFilters) > 0 || s.isArrayPredicateATS() || s.isTemporalFunctionsATS() {
+		if s.isParserOnlyATS() || s.isSpatialATS() && len(s.spatialFilters) > 0 {
 			return s.arrayPredicateParsingSucceeds()
 		}
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
+	if s.expectsFilterEvaluation() && len(s.atsEvaluations) == 0 && s.parseAttempts == 0 {
+		return fmt.Errorf("%s asserted successful evaluation but recorded no parse checks or fixture evaluations", s.current.ID)
+	}
+	if s.isLogicalCombinationATS() && s.logicalCombinations < 10 {
+		return fmt.Errorf("logical ATS scenario recorded %d combinations, want at least 10", s.logicalCombinations)
+	}
 	for _, evaluation := range s.atsEvaluations {
 		if evaluation.Err != nil {
 			return fmt.Errorf("evaluate %q: %w", evaluation.Filter, evaluation.Err)
@@ -513,13 +566,19 @@ func (s *cql2ATSSuite) assertExpectedATSResultsReturned() error {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
+	s.resultAssertions++
+	checked := 0
 	for _, evaluation := range s.atsEvaluations {
 		if evaluation.ExpectedIDs == nil {
 			continue
 		}
+		checked++
 		if !reflect.DeepEqual(evaluation.IDs, evaluation.ExpectedIDs) {
 			return fmt.Errorf("ids for %q = %#v, want %#v", evaluation.Filter, evaluation.IDs, evaluation.ExpectedIDs)
 		}
+	}
+	if checked == 0 {
+		return fmt.Errorf("%s expected result assertion found no evaluations with expected IDs", s.current.ID)
 	}
 	return nil
 }
@@ -529,6 +588,7 @@ func (s *cql2ATSSuite) assertOperatorResultSetsDisjoint(left, right string) erro
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	return s.assertEvaluationsByQueryablePair(left, right, atsAssertDisjoint)
 }
 
@@ -537,6 +597,7 @@ func (s *cql2ATSSuite) assertOperatorResultSetsEmpty() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	emptyOps := map[string]struct{}{"<>": {}, "<": {}, ">": {}}
 	for _, evaluation := range s.atsEvaluations {
 		if _, ok := emptyOps[evaluation.Key]; ok && len(evaluation.IDs) != 0 {
@@ -551,6 +612,7 @@ func (s *cql2ATSSuite) assertOperatorResultSetsIdentical() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	if err := s.assertEvaluationsByQueryablePair("=", ">=", atsAssertIdentical); err != nil {
 		return err
 	}
@@ -560,10 +622,12 @@ func (s *cql2ATSSuite) assertOperatorResultSetsIdentical() error {
 func (s *cql2ATSSuite) assertPairedResultSetsDisjoint() error {
 	if s.current.ID == basicIsNullATSID {
 		s.executedByStep = true
+		s.resultAssertions++
 		return s.assertEvaluationsByQueryablePair("is null", "is not null", atsAssertDisjoint)
 	}
 	if s.isInsensitiveStringPredicateATS() {
 		s.executedByStep = true
+		s.resultAssertions++
 		return s.assertFirstTwoEvaluationsByQueryable(atsAssertDisjoint)
 	}
 	return nil
@@ -574,6 +638,7 @@ func (s *cql2ATSSuite) assertPairedResultSetsIdentical() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	return s.assertFirstTwoEvaluationsByQueryable(atsAssertIdentical)
 }
 
@@ -582,6 +647,7 @@ func (s *cql2ATSSuite) assertFalseResultSetsEmpty() error {
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	for _, evaluation := range s.atsEvaluations {
 		if evaluation.Key == "false" && len(evaluation.IDs) != 0 {
 			return fmt.Errorf("false filter returned %#v, want empty result set", evaluation.IDs)
@@ -595,6 +661,7 @@ func (s *cql2ATSSuite) assertPatternResultSetsDisjoint(left, right string) error
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	return s.assertEvaluationsByQueryablePair(left, right, atsAssertDisjoint)
 }
 
@@ -603,6 +670,7 @@ func (s *cql2ATSSuite) assertPatternResultSetsIdentical(left, right string) erro
 		return nil
 	}
 	s.executedByStep = true
+	s.resultAssertions++
 	return s.assertEvaluationsByQueryablePair(left, right, atsAssertIdentical)
 }
 
@@ -615,19 +683,22 @@ func (s *cql2ATSSuite) recordATSEvaluation(filter, queryable, key string, expect
 	s.recordATSEvaluationResult(filter, queryable, key, ids, expected, err)
 }
 
-func (s *cql2ATSSuite) recordATSEvaluationResult(filter, queryable, key string, ids, expected []string, err error) {
+func (s *cql2ATSSuite) recordATSEvaluationResult(filter, queryable, key string, ids, expected []string, err error) atsEvaluation {
 	var expectedIDs []string
 	if expected != nil {
 		expectedIDs = append([]string{}, expected...)
 	}
-	s.atsEvaluations = append(s.atsEvaluations, atsEvaluation{
+	evaluation := atsEvaluation{
 		Filter:      filter,
 		Queryable:   queryable,
 		Key:         key,
 		IDs:         ids,
 		ExpectedIDs: expectedIDs,
 		Err:         err,
-	})
+	}
+	s.atsEvaluations = append(s.atsEvaluations, evaluation)
+	s.fixtureEvaluations++
+	return evaluation
 }
 
 func (s *cql2ATSSuite) storeSuccessfulATSPredicates() {
@@ -668,6 +739,10 @@ func (s *cql2ATSSuite) fixturePredicateApplies(predicate atsFixturePredicate) bo
 	default:
 		return false
 	}
+}
+
+func (s *cql2ATSSuite) expectsFilterEvaluation() bool {
+	return s.current.ID != basicTestATSID
 }
 
 func (s *cql2ATSSuite) isLogicalCombinationATS() bool {
@@ -815,13 +890,27 @@ func atsPredicateCombinations(predicates []atsStoredPredicate, limit int) [][]at
 	if len(predicates) < 4 {
 		return nil
 	}
-	count := limit
-	if maxCount := len(predicates) - 3; count > maxCount {
-		count = maxCount
-	}
-	out := make([][]atsStoredPredicate, 0, count)
-	for i := 0; i < count; i++ {
-		out = append(out, []atsStoredPredicate{predicates[i], predicates[i+1], predicates[i+2], predicates[i+3]})
+	out := make([][]atsStoredPredicate, 0, limit)
+	for a := range predicates {
+		for b := range predicates {
+			if b == a {
+				continue
+			}
+			for c := range predicates {
+				if c == a || c == b {
+					continue
+				}
+				for d := range predicates {
+					if d == a || d == b || d == c {
+						continue
+					}
+					out = append(out, []atsStoredPredicate{predicates[a], predicates[b], predicates[c], predicates[d]})
+					if len(out) == limit {
+						return out
+					}
+				}
+			}
+		}
 	}
 	return out
 }

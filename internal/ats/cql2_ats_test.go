@@ -41,8 +41,14 @@ type cql2ATSSuite struct {
 	mu             sync.Mutex
 	executedByStep bool
 
-	spatialParseErrs []error
-	spatialFilters   []string
+	spatialParseErrs   []error
+	spatialFilters     []string
+	spatialEvaluations []atsEvaluation
+
+	parseAttempts       int
+	fixtureEvaluations  int
+	resultAssertions    int
+	logicalCombinations int
 
 	atsEvaluations      []atsEvaluation
 	storedATSPredicates []atsStoredPredicate
@@ -81,6 +87,7 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 		Options: &godog.Options{
 			Format:   "progress",
 			Paths:    []string{"features/ats"},
+			Strict:   true,
 			TestingT: t,
 		},
 	}
@@ -94,7 +101,6 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 		suiteState.total,
 	)
 	t.Log(summary)
-	t.Run(fmt.Sprintf("summary: %d of %d passed", suiteState.passed, suiteState.total), func(t *testing.T) {})
 
 	if status != 0 {
 		t.Fatalf("CQL2 Abstract Test Suite failed with status %d", status)
@@ -154,6 +160,11 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 		s.executedByStep = false
 		s.spatialParseErrs = nil
 		s.spatialFilters = nil
+		s.spatialEvaluations = nil
+		s.parseAttempts = 0
+		s.fixtureEvaluations = 0
+		s.resultAssertions = 0
+		s.logicalCombinations = 0
 		s.atsEvaluations = nil
 		return ctx, nil
 	})
@@ -163,6 +174,8 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 			s.executeErr = stepErr
 		} else if !s.executedByStep {
 			s.executeErr = fmt.Errorf("CQL2 abstract test execution is not implemented for %s", s.current.ID)
+		} else if err := s.assertScenarioHasMeaningfulWork(); err != nil {
+			s.executeErr = err
 		}
 		return ctx, s.recordAbstractTestResult()
 	})
@@ -214,7 +227,7 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^For each function construct multiple valid filter expressions involving different operators\.$`, s.forEachFunctionConstructMultipleValidFilterExpressions)
 	ctx.Step(`^(\{queryable\} [Bb][Ee][Tt][Ww][Ee][Ee][Nn] .+)$`, s.evaluateNumericPredicateTemplate)
 	ctx.Step(`^(?:for|For) each queryable \{queryable\} of type (Number or Integer|String|Boolean|Timestamp|Date), evaluate the following filter expression (.+) ;$`, s.evaluateTypedQueryableFilterExpression)
-	ctx.Step(`^Evaluate each predicate in Predicates and expected results(?: , if the conditional dependency is met)? \.$`, s.evaluateEachFixturePredicate)
+	ctx.Step(`^Evaluate each predicate in Predicates and expected results(?: \.| , if the conditional dependency is met\.)$`, s.evaluateEachFixturePredicate)
 	ctx.Step(`^Evaluate each predicate in Combinations of predicates and expected results \.$`, s.evaluateStoredPredicateCombinations)
 	ctx.Step(`^For the data source 'ne_110m_populated_places_simple', evaluate the filter expression (.+) for each combination of predicates \{p1\} to \{p4\} in Combinations of predicates and expected results \.$`, s.evaluateSpecificStoredPredicateCombination)
 	ctx.Step(`^For each data source, select at least 10 random combinations of four predicates \( \{p1\} to \{p4\} \) from the stored predicates and evaluate the filter expression (.+) \.$`, s.evaluateSpecificStoredPredicateCombination)
@@ -236,12 +249,16 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^At least one queryable has a geometry data type\.$`, s.atLeastOneQueryableHasGeometryDataType)
 	ctx.Step(`^(?:For|for) each queryable \{queryable\} with a geometry data type, evaluate the following filter expressions$`, s.forEachSpatialQueryableEvaluateFilters)
-	ctx.Step(`^(?:For|for) each queryable \{queryable\} of type .+, evaluate the following filter expressions$`, s.forEachSpatialQueryableEvaluateFilters)
-	ctx.Step(`^(?:For|for) each queryable \{queryable\} of type .+, evaluate the filter expression (S_(?:INTERSECTS|DISJOINT|EQUALS|TOUCHES|CROSSES|WITHIN|CONTAINS|OVERLAPS)\(.+\))$`, s.iEvaluateTheSpatialPredicateTemplate)
+	ctx.Step(`^(?:For|for) each queryable \{queryable\} of type (?:Point, MultiPoint, LineString or MultiLineString), evaluate the following filter expressions$`, s.forEachSpatialQueryableEvaluateFilters)
+	ctx.Step(`^(?:For|for) each queryable \{queryable\} of type (?:Point or MultiPoint|LineString or MultiLineString|Polygon or MultiPolygon), evaluate the filter expression (S_(?:INTERSECTS|DISJOINT|EQUALS|TOUCHES|CROSSES|WITHIN|CONTAINS|OVERLAPS)\(.+\))$`, s.iEvaluateTheSpatialPredicateTemplate)
 	ctx.Step(`^(S_(?:INTERSECTS|DISJOINT|EQUALS|TOUCHES|CROSSES|WITHIN|CONTAINS|OVERLAPS)\(.+\)(?: AND S_(?:INTERSECTS|DISJOINT|EQUALS|TOUCHES|CROSSES|WITHIN|CONTAINS|OVERLAPS)\(.+\))?)$`, s.iEvaluateTheSpatialPredicateTemplate)
 	ctx.Step(`^assert successful execution of the evaluation for the first (two|four) filter expressions;$`, s.assertSpatialSuccessFirst)
 	ctx.Step(`^assert successful execution of the evaluation for all filter expressions except the first;$`, s.assertSpatialSuccessExceptFirst)
 	ctx.Step(`^assert unsuccessful execution of the evaluation for the (first|third|fifth) filter expressions \(invalid coordinate\);$`, s.assertSpatialFailureOrdinal)
+	ctx.Step(`^assert that the two result sets of the first two filter expressions for each queryable are identical;$`, s.assertSpatialFirstTwoResultSetsIdentical)
+	ctx.Step(`^assert that the two result sets of the first two filter expressions for each queryable are empty;$`, s.assertSpatialFirstTwoResultSetsEmpty)
+	ctx.Step(`^assert that the results sets of the third and fourth filter expressions for each queryable do not have an item in common with the corresponding S_INTERSECTS expression;$`, s.assertSpatialDisjointThirdFourthFromIntersects)
+	ctx.Step(`^assert that the results sets for each queryable do not have an item in common with the corresponding S_WITHIN expression;$`, s.assertSpatialContainsDisjointFromWithin)
 
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least one queryable of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
 	ctx.Step(`^One or more data sources, each with a list of queryables with at least two queryables of type Timestamp or Date\.$`, s.oneOrMoreDataSourcesWithTemporalQueryable)
@@ -267,12 +284,14 @@ func cql2AbstractTestFromScenario(sc *godog.Scenario) cql2AbstractTest {
 
 func (s *cql2ATSSuite) iParseTheCQL2TextFilter(filter string) error {
 	s.executedByStep = true
+	s.parseAttempts++
 	s.parsed, s.parseErr = gocql2.NewParser().ParseText(filter)
 	return nil
 }
 
 func (s *cql2ATSSuite) iParseTheCQL2JSONFilter(doc *godog.DocString) error {
 	s.executedByStep = true
+	s.parseAttempts++
 	s.parsed, s.parseErr = gocql2.NewParser().ParseJSON([]byte(doc.Content))
 	return nil
 }
@@ -315,6 +334,10 @@ func (s *cql2ATSSuite) isTemporalFunctionsATS() bool {
 	return s.current.ID == temporalFunctions1ATSID || s.current.ID == temporalFunctions2ATSID
 }
 
+func (s *cql2ATSSuite) isParserOnlyATS() bool {
+	return s.isArrayPredicateATS() || s.isTemporalFunctionsATS()
+}
+
 func (s *cql2ATSSuite) isSpatialATS() bool {
 	return strings.Contains(s.current.ID, "spatial-functions")
 }
@@ -346,6 +369,7 @@ func (s *cql2ATSSuite) iEvaluateTheArrayPredicateTemplate(filter string) error {
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "tags")
+	s.parseAttempts++
 	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "tags", Type: api.PropertyTypeArray},
 		api.PropertyDefinition{Name: "foo", Type: api.PropertyTypeString},
 		api.PropertyDefinition{Name: "bar", Type: api.PropertyTypeString}).ParseText(filter)
@@ -373,10 +397,19 @@ func (s *cql2ATSSuite) iEvaluateTheSpatialPredicateTemplate(filter string) error
 	}
 	s.executedByStep = true
 	filter = strings.ReplaceAll(filter, "{queryable}", "geom")
-	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceSpatialFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "geom", Type: api.PropertyTypeGeometry}).ParseText(filter)
+	s.parseAttempts++
+	s.parsed, s.parseErr = s.atsParser.ParseText(filter)
 
 	s.spatialFilters = append(s.spatialFilters, filter)
 	s.spatialParseErrs = append(s.spatialParseErrs, s.parseErr)
+	if s.parseErr != nil {
+		s.spatialEvaluations = append(s.spatialEvaluations, atsEvaluation{Filter: filter, Queryable: "geom", Key: atsSpatialFunctionName(filter), Err: s.parseErr})
+		return nil //nolint:nilerr // Invalid-coordinate scenarios assert the recorded parse error in later steps.
+	}
+
+	ids, err := s.evaluateATSFixtureFilter(filter)
+	evaluation := s.recordATSEvaluationResult(filter, "geom", atsSpatialFunctionName(filter), ids, nil, err)
+	s.spatialEvaluations = append(s.spatialEvaluations, evaluation)
 	return nil
 }
 
@@ -402,6 +435,7 @@ func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(filter string) erro
 	filter = strings.ReplaceAll(filter, "{queryable1}", "start_time")
 	filter = strings.ReplaceAll(filter, "{queryable2}", "end_time")
 	filter = strings.ReplaceAll(filter, "{queryable}", "event_time")
+	s.parseAttempts++
 	s.parsed, s.parseErr = gocql2.NewParser().WithConformance(api.ConformanceTemporalFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "event_time", Type: api.PropertyTypeAny},
 		api.PropertyDefinition{Name: "start_time", Type: api.PropertyTypeAny},
 		api.PropertyDefinition{Name: "end_time", Type: api.PropertyTypeAny}).ParseText(filter)
@@ -418,6 +452,9 @@ func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
 		return nil
 	}
 	s.executedByStep = true
+	if s.parseAttempts == 0 {
+		return fmt.Errorf("%s asserted parser-only success but recorded no parse checks", s.current.ID)
+	}
 	return s.parseErr
 }
 
@@ -476,15 +513,118 @@ func (s *cql2ATSSuite) assertSpatialSuccessAll() error {
 }
 
 func (s *cql2ATSSuite) assertSpatialRangeSuccess(start, end int) error {
-	if end > len(s.spatialParseErrs) {
-		return fmt.Errorf("expected at least %d spatial predicate evaluations, got %d", end, len(s.spatialParseErrs))
+	if end > len(s.spatialEvaluations) {
+		return fmt.Errorf("expected at least %d spatial predicate evaluations, got %d", end, len(s.spatialEvaluations))
 	}
 	for i := start; i < end; i++ {
-		if err := s.spatialParseErrs[i]; err != nil {
-			return fmt.Errorf("spatial predicate %d failed to parse (%s): %w", i+1, s.spatialFilters[i], err)
+		if err := s.spatialEvaluations[i].Err; err != nil {
+			return fmt.Errorf("spatial predicate %d failed (%s): %w", i+1, s.spatialFilters[i], err)
 		}
 	}
 	return nil
+}
+
+func (s *cql2ATSSuite) assertSpatialFirstTwoResultSetsIdentical() error {
+	if !s.isSpatialATS() {
+		return nil
+	}
+	s.executedByStep = true
+	s.resultAssertions++
+	first, err := s.spatialEvaluationAt(0)
+	if err != nil {
+		return err
+	}
+	second, err := s.spatialEvaluationAt(1)
+	if err != nil {
+		return err
+	}
+	if err := atsAssertIdentical(first.IDs, second.IDs); err != nil {
+		return fmt.Errorf("first two spatial result sets: %w", err)
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) assertSpatialFirstTwoResultSetsEmpty() error {
+	if !s.isSpatialATS() {
+		return nil
+	}
+	s.executedByStep = true
+	s.resultAssertions++
+	for i := 0; i < 2; i++ {
+		evaluation, err := s.spatialEvaluationAt(i)
+		if err != nil {
+			return err
+		}
+		if len(evaluation.IDs) != 0 {
+			return fmt.Errorf("spatial predicate %d returned %#v, want empty result set", i+1, evaluation.IDs)
+		}
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) assertSpatialDisjointThirdFourthFromIntersects() error {
+	if !s.isSpatialATS() {
+		return nil
+	}
+	s.executedByStep = true
+	s.resultAssertions++
+	for _, index := range []int{2, 3} {
+		evaluation, err := s.spatialEvaluationAt(index)
+		if err != nil {
+			return err
+		}
+		corresponding := strings.Replace(evaluation.Filter, "S_DISJOINT", "S_INTERSECTS", 1)
+		if err := s.assertSpatialEvaluationDisjointFromFilter(evaluation, corresponding); err != nil {
+			return fmt.Errorf("spatial predicate %d compared with %q: %w", index+1, corresponding, err)
+		}
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) assertSpatialContainsDisjointFromWithin() error {
+	if !s.isSpatialATS() {
+		return nil
+	}
+	s.executedByStep = true
+	s.resultAssertions++
+	for i, evaluation := range s.spatialEvaluations {
+		if evaluation.Err != nil {
+			return fmt.Errorf("spatial predicate %d failed (%s): %w", i+1, evaluation.Filter, evaluation.Err)
+		}
+		corresponding := strings.Replace(evaluation.Filter, "S_CONTAINS", "S_WITHIN", 1)
+		if err := s.assertSpatialEvaluationDisjointFromFilter(evaluation, corresponding); err != nil {
+			return fmt.Errorf("spatial predicate %d compared with %q: %w", i+1, corresponding, err)
+		}
+	}
+	return nil
+}
+
+func (s *cql2ATSSuite) spatialEvaluationAt(index int) (atsEvaluation, error) {
+	if index >= len(s.spatialEvaluations) {
+		return atsEvaluation{}, fmt.Errorf("expected spatial predicate %d, got %d evaluations", index+1, len(s.spatialEvaluations))
+	}
+	evaluation := s.spatialEvaluations[index]
+	if evaluation.Err != nil {
+		return atsEvaluation{}, fmt.Errorf("spatial predicate %d failed (%s): %w", index+1, evaluation.Filter, evaluation.Err)
+	}
+	return evaluation, nil
+}
+
+func (s *cql2ATSSuite) assertSpatialEvaluationDisjointFromFilter(evaluation atsEvaluation, filter string) error {
+	ids, err := s.evaluateATSFixtureFilter(filter)
+	s.fixtureEvaluations++
+	if err != nil {
+		return err
+	}
+	return atsAssertDisjoint(evaluation.IDs, ids)
+}
+
+func atsSpatialFunctionName(filter string) string {
+	open := strings.IndexByte(filter, '(')
+	if open == -1 {
+		return filter
+	}
+	return strings.ToUpper(strings.TrimSpace(filter[:open]))
 }
 
 func ordinalIndex(ordinal string) (int, error) {
@@ -498,6 +638,16 @@ func ordinalIndex(ordinal string) (int, error) {
 	default:
 		return 0, fmt.Errorf("unsupported ordinal %q", ordinal)
 	}
+}
+
+func (s *cql2ATSSuite) assertScenarioHasMeaningfulWork() error {
+	if s.current.ID == "" {
+		return nil
+	}
+	if s.parseAttempts+s.fixtureEvaluations+s.resultAssertions == 0 {
+		return fmt.Errorf("%s executed steps but recorded no parse checks, fixture evaluations, or result assertions", s.current.ID)
+	}
+	return nil
 }
 
 func (s *cql2ATSSuite) recordAbstractTestResult() error {
