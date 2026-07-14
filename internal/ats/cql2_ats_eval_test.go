@@ -77,6 +77,11 @@ type atsTemporalFilter struct {
 	queryable string
 }
 
+type atsValueLiteral struct {
+	Type api.PropertyType
+	Text string
+}
+
 func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 	switch s.current.ID {
 	case basicTestATSID,
@@ -403,8 +408,10 @@ func (s *cql2ATSSuite) evaluateValueValueComparisonTemplate(template string) err
 	}
 	s.executedByStep = true
 	op := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(template, "{value}"), "{value}"))
-	filter := "'foo' " + op + " 'foo'"
-	s.recordATSEvaluation(filter, "value", op, nil)
+	for _, literal := range atsValueValueComparisonLiterals() {
+		filter := literal.Text + " " + op + " " + literal.Text
+		s.recordATSEvaluation(filter, atsValueLiteralGroup(literal), op, nil)
+	}
 	return nil
 }
 
@@ -450,6 +457,9 @@ func (s *cql2ATSSuite) evaluateQueryableIsNullTemplate(template string) error {
 }
 
 func (s *cql2ATSSuite) evaluateBooleanFilter(filter string) error {
+	if s.current.ID == valueValueATSID {
+		return s.acknowledgeValueLiteral()
+	}
 	if s.current.ID != basicBooleanATSID {
 		return nil
 	}
@@ -536,9 +546,12 @@ func (s *cql2ATSSuite) evaluateSpecificStoredPredicateCombination(template strin
 		return nil
 	}
 	s.executedByStep = true
-	combinations := atsPredicateCombinations(s.storedATSPredicates, 10)
-	if len(combinations) < 10 {
-		return fmt.Errorf("logical ATS scenario recorded %d combinations, want at least 10", len(combinations))
+	if len(s.storedATSPredicates) < 4 {
+		return fmt.Errorf("logical ATS scenario needs at least four stored predicates, got %d", len(s.storedATSPredicates))
+	}
+	combinations := atsPredicateCombinations(s.storedATSPredicates)
+	if len(combinations) < atsLogicalCombinationCount {
+		return fmt.Errorf("logical ATS scenario generated %d combinations, want at least %d", len(combinations), atsLogicalCombinationCount)
 	}
 	s.logicalCombinations = len(combinations)
 	for _, combo := range combinations {
@@ -861,6 +874,21 @@ func atsComparisonLiteralForType(typ api.PropertyType) string {
 	}
 }
 
+func atsValueValueComparisonLiterals() []atsValueLiteral {
+	return []atsValueLiteral{
+		{Type: api.PropertyTypeString, Text: "'foo'"},
+		{Type: api.PropertyTypeBoolean, Text: "true"},
+		{Type: api.PropertyTypeNumber, Text: "3.14"},
+		{Type: api.PropertyTypeInteger, Text: "1"},
+		{Type: api.PropertyTypeTimestamp, Text: "TIMESTAMP('2022-04-14T14:48:46Z')"},
+		{Type: api.PropertyTypeDate, Text: "DATE('2022-04-14')"},
+	}
+}
+
+func atsValueLiteralGroup(literal atsValueLiteral) string {
+	return "value:" + string(literal.Type)
+}
+
 func atsFixtureQueryablesForATSName(name string) []atsFixtureQueryable {
 	switch name {
 	case "Number or Integer":
@@ -977,33 +1005,73 @@ func atsTemporalPairQueryables(typ api.PropertyType) (string, string, error) {
 	return start, end, nil
 }
 
-func atsPredicateCombinations(predicates []atsStoredPredicate, limit int) [][]atsStoredPredicate {
+const atsLogicalCombinationCount = 10
+
+func atsPredicateCombinations(predicates []atsStoredPredicate) [][]atsStoredPredicate {
 	if len(predicates) < 4 {
 		return nil
 	}
-	out := make([][]atsStoredPredicate, 0, limit)
-	for a := range predicates {
-		for b := range predicates {
-			if b == a {
-				continue
-			}
-			for c := range predicates {
-				if c == a || c == b {
-					continue
-				}
-				for d := range predicates {
-					if d == a || d == b || d == c {
-						continue
-					}
-					out = append(out, []atsStoredPredicate{predicates[a], predicates[b], predicates[c], predicates[d]})
-					if len(out) == limit {
-						return out
-					}
-				}
-			}
+	total := atsPermutation4Count(len(predicates))
+	stride := atsCoprimeStride(total, len(predicates))
+	offset := (len(predicates)*7919 + 104729) % total
+	out := make([][]atsStoredPredicate, 0, atsLogicalCombinationCount)
+	for i := 0; i < atsLogicalCombinationCount; i++ {
+		rank := (offset + i*stride) % total
+		indexes := atsUnrankPredicatePermutation4(len(predicates), rank)
+		combo := make([]atsStoredPredicate, 4)
+		for j, index := range indexes {
+			combo[j] = predicates[index]
 		}
+		out = append(out, combo)
 	}
 	return out
+}
+
+func atsPermutation4Count(n int) int {
+	if n < 4 {
+		return 0
+	}
+	return n * (n - 1) * (n - 2) * (n - 3)
+}
+
+func atsUnrankPredicatePermutation4(n, rank int) [4]int {
+	pool := make([]int, n)
+	for i := range pool {
+		pool[i] = i
+	}
+	var out [4]int
+	for pos := range out {
+		block := 1
+		for next := 1; next < 4-pos; next++ {
+			block *= n - pos - next
+		}
+		choice := rank / block
+		rank %= block
+		out[pos] = pool[choice]
+		pool = append(pool[:choice], pool[choice+1:]...)
+	}
+	return out
+}
+
+func atsCoprimeStride(total, n int) int {
+	stride := (n*3571 + 1) % total
+	if stride == 0 {
+		stride = 1
+	}
+	for atsGCD(stride, total) != 1 {
+		stride++
+		if stride == total {
+			stride = 1
+		}
+	}
+	return stride
+}
+
+func atsGCD(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
 }
 
 func atsExpectedLogicalCombinationIDs(atsID string, predicates []atsStoredPredicate) []string {
