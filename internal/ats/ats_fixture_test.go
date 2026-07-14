@@ -6,19 +6,22 @@ import (
 	"github.com/cwygoda/gocql2/api"
 )
 
-// atsFixture is a dialect-neutral dataset for exercising the CQL2 Abstract Test
-// Suite. Keep this file free of cql2sql.SQL snippets and database-specific types so the
-// same records and expected result sets can be loaded into PostGIS, SQLite,
+// atsFixture is a dialect-neutral, ATS-inspired regression dataset. It is not
+// the normative OGC ATS dataset; it uses curated populated-place records to
+// exercise the CQL2 runner against stable fixture-backed expectations.
+//
+// Keep this file free of cql2sql.SQL snippets and database-specific types so
+// the same records and expected result sets can be loaded into PostGIS, SQLite,
 // in-memory evaluators, or future dialect adapters.
 var atsFixture = atsFixtureDataSource{
 	Name:        "ne_110m_populated_places_simple",
-	Description: "Curated real-world populated-place records inspired by Natural Earth queryables.",
+	Description: "Curated fixture-backed populated-place records inspired by Natural Earth queryables; not the normative ATS dataset.",
 	Queryables: []atsFixtureQueryable{
 		{Name: "name", Type: api.PropertyTypeString, Description: "Local place name, preserving accents where commonly used."},
 		{Name: "name_ascii", Type: api.PropertyTypeString, Description: "ASCII/transliterated place name."},
 		{Name: "country", Type: api.PropertyTypeString, Description: "Country name."},
 		{Name: "capital", Type: api.PropertyTypeBoolean, Description: "Whether the place is a national capital."},
-		{Name: "population", Type: api.PropertyTypeInteger, Description: "Approximate municipal/metropolitan population used as stable ATS data."},
+		{Name: "population", Type: api.PropertyTypeInteger, Description: "Approximate municipal/metropolitan population used as stable fixture data."},
 		{Name: "elevation_m", Type: api.PropertyTypeNumber, Description: "Approximate elevation in metres above sea level; nullable for IS NULL tests."},
 		{Name: "founded_date", Type: api.PropertyTypeDate, Description: "Commonly cited founding date, or first day of cited founding year when only a year is stable."},
 		{Name: "last_updated", Type: api.PropertyTypeTimestamp, Description: "Stable fixture timestamp for temporal instant tests."},
@@ -218,7 +221,7 @@ func atsFixtureQueryablesByName() map[string]atsFixtureQueryable {
 	return queryables
 }
 
-func TestATSFixtureDataSourceMetadata(t *testing.T) {
+func TestATSInspiredFixtureDataSourceMetadata(t *testing.T) {
 	if atsFixture.Name != "ne_110m_populated_places_simple" {
 		t.Fatalf("ATS fixture data source = %q", atsFixture.Name)
 	}

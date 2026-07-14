@@ -13,11 +13,11 @@ tasks:
 
   test:unit:
     desc: run unit tests
-    cmd: gotestsum --format testname -- -race -skip '^TestCQL2AbstractTestSuite$' ./...
+    cmd: gotestsum --format testname -- -race -skip '^TestCQL2ATSInspiredFixtureBackedSuite$' ./...
 
   test:ats:
-    desc: run CQL2 Abstract Test Suite Gherkin tests
-    cmd: gotestsum --format testname -- -race -run '^TestCQL2AbstractTestSuite$' ./...
+    desc: run ATS-inspired fixture-backed Gherkin tests
+    cmd: gotestsum --format testname -- -race -run '^TestCQL2ATSInspiredFixtureBackedSuite$' ./...
 
   test:
     desc: run all test suites

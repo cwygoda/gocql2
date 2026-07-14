@@ -58,9 +58,9 @@ type cql2ATSSuite struct {
 	atsSQLOpts          []cql2sql.Option
 }
 
-func TestCQL2AbstractTestSuite(t *testing.T) {
+func TestCQL2ATSInspiredFixtureBackedSuite(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping PostGIS-backed ATS runner in short mode")
+		t.Skip("skipping PostGIS-backed ATS-inspired fixture runner in short mode")
 	}
 
 	db, cleanup := setupATSPostGISDatabase(t)
@@ -83,7 +83,7 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 	}
 
 	suite := godog.TestSuite{
-		Name:                "cql2-abstract-test-suite",
+		Name:                "cql2-ats-inspired-fixture-backed-suite",
 		ScenarioInitializer: suiteState.initializeScenario,
 		Options: &godog.Options{
 			Format:   "progress",
@@ -94,18 +94,16 @@ func TestCQL2AbstractTestSuite(t *testing.T) {
 	}
 
 	status := suite.Run()
-	summary := fmt.Sprintf(
-		"CQL2 ATS summary: %d/%d passed; %d/%d failed",
+	if status != 0 {
+		t.Fatalf("CQL2 ATS-inspired fixture-backed suite failed with status %d", status)
+	}
+	t.Logf(
+		"CQL2 ATS-inspired fixture-backed summary: %d/%d passed; %d/%d failed",
 		suiteState.passed,
 		suiteState.total,
 		suiteState.failed,
 		suiteState.total,
 	)
-	t.Log(summary)
-
-	if status != 0 {
-		t.Fatalf("CQL2 Abstract Test Suite failed with status %d", status)
-	}
 }
 
 func setupATSPostGISDatabase(t *testing.T) (*sql.DB, func()) {
@@ -122,7 +120,7 @@ func setupATSPostGISDatabase(t *testing.T) (*sql.DB, func()) {
 	)
 	if err != nil {
 		cancel()
-		t.Skipf("PostGIS container unavailable for ATS runner: %v", err)
+		t.Skipf("PostGIS container unavailable for ATS-inspired fixture runner: %v", err)
 	}
 	t.Cleanup(func() { testcontainers.CleanupContainer(t, ctr) })
 
@@ -172,10 +170,14 @@ func (s *cql2ATSSuite) initializeScenario(ctx *godog.ScenarioContext) {
 	})
 
 	ctx.After(func(ctx context.Context, sc *godog.Scenario, stepErr error) (context.Context, error) {
+		// Step handlers set executedByStep when a scenario is intentionally handled.
+		// Handled scenarios must also increment at least one coverage counter
+		// (parseAttempts, fixtureEvaluations, or resultAssertions) so setup-only or
+		// no-op handlers cannot make this ATS-inspired suite pass vacuously.
 		if stepErr != nil {
 			s.executeErr = stepErr
 		} else if !s.executedByStep {
-			s.executeErr = fmt.Errorf("CQL2 abstract test execution is not implemented for %s", s.current.ID)
+			s.executeErr = fmt.Errorf("CQL2 ATS-inspired fixture execution is not implemented for %s", s.current.ID)
 		} else if err := s.assertScenarioHasMeaningfulWork(); err != nil {
 			s.executeErr = err
 		}
@@ -334,16 +336,12 @@ func (s *cql2ATSSuite) isTemporalFunctionsATS() bool {
 	return s.current.ID == temporalFunctions1ATSID || s.current.ID == temporalFunctions2ATSID
 }
 
-func (s *cql2ATSSuite) isParserOnlyATS() bool {
-	return false
-}
-
 func (s *cql2ATSSuite) isSpatialATS() bool {
 	return strings.Contains(s.current.ID, "spatial-functions")
 }
 
 func (s *cql2ATSSuite) oneOrMoreDataSourcesWithQueryableLists() error {
-	if s.isImplementedScalarATS() || s.isArrayPredicateATS() || s.isSpatialATS() {
+	if s.isFixtureBackedATS() {
 		s.executedByStep = true
 	}
 	return nil
@@ -458,29 +456,11 @@ func (s *cql2ATSSuite) iEvaluateTheTemporalPredicateTemplate(template string) er
 	return nil
 }
 
-func (s *cql2ATSSuite) arrayPredicateParsingSucceeds() error {
-	if s.isSpatialATS() {
-		s.executedByStep = true
-		return s.assertSpatialSuccessAll()
-	}
-	if !s.isArrayPredicateATS() && !s.isTemporalFunctionsATS() {
-		return nil
-	}
-	s.executedByStep = true
-	if s.parseAttempts == 0 {
-		return fmt.Errorf("%s asserted parser-only success but recorded no parse checks", s.current.ID)
-	}
-	return s.parseErr
-}
-
 func (s *cql2ATSSuite) storeTheValidPredicatesForEachDataSource() error {
-	if s.isImplementedScalarATS() {
+	if s.isFixtureBackedATS() {
 		s.executedByStep = true
 		s.storeSuccessfulATSPredicates()
 		return nil
-	}
-	if s.isArrayPredicateATS() || s.isTemporalFunctionsATS() || s.isSpatialATS() && len(s.spatialFilters) > 0 {
-		s.executedByStep = true
 	}
 	return nil
 }
@@ -521,10 +501,6 @@ func (s *cql2ATSSuite) assertSpatialFailureOrdinal(ordinal string) error {
 		return fmt.Errorf("spatial predicate %d parsed successfully, want invalid coordinate failure: %s", index+1, s.spatialFilters[index])
 	}
 	return nil
-}
-
-func (s *cql2ATSSuite) assertSpatialSuccessAll() error {
-	return s.assertSpatialRangeSuccess(0, len(s.spatialParseErrs))
 }
 
 func (s *cql2ATSSuite) assertSpatialRangeSuccess(start, end int) error {

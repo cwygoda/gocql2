@@ -82,7 +82,14 @@ type atsValueLiteral struct {
 	Text string
 }
 
-func (s *cql2ATSSuite) isImplementedScalarATS() bool {
+// isFixtureBackedATS reports whether this ATS-inspired runner knows how to
+// exercise the scenario against the curated PostGIS fixture (or fixture-backed
+// metadata derived from it). Unknown scenarios fail rather than pass vacuously.
+func (s *cql2ATSSuite) isFixtureBackedATS() bool {
+	if s.isSpatialATS() {
+		return true
+	}
+
 	switch s.current.ID {
 	case basicTestATSID,
 		basicComparisonATSID,
@@ -132,14 +139,14 @@ func (s *cql2ATSSuite) isImplementedScalarATS() bool {
 }
 
 func (s *cql2ATSSuite) oneOrMoreDataSources() error {
-	if s.isImplementedScalarATS() {
+	if s.isFixtureBackedATS() {
 		s.executedByStep = true
 	}
 	return nil
 }
 
 func (s *cql2ATSSuite) nA() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
@@ -147,7 +154,7 @@ func (s *cql2ATSSuite) nA() error {
 }
 
 func (s *cql2ATSSuite) dependencyPasses() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
@@ -155,7 +162,7 @@ func (s *cql2ATSSuite) dependencyPasses() error {
 }
 
 func (s *cql2ATSSuite) acknowledgeScalarValueMetadata() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
@@ -167,7 +174,7 @@ func (s *cql2ATSSuite) acknowledgeScalarTypedValueMetadata(string) error {
 }
 
 func (s *cql2ATSSuite) theImplementationUsesTheTestDataset() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
@@ -175,7 +182,7 @@ func (s *cql2ATSSuite) theImplementationUsesTheTestDataset() error {
 }
 
 func (s *cql2ATSSuite) theStoredPredicatesForEachDataSource() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -187,7 +194,7 @@ func (s *cql2ATSSuite) theStoredPredicatesForEachDataSource() error {
 }
 
 func (s *cql2ATSSuite) assertAtLeastOneQueryableForEachDataSource() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -199,7 +206,7 @@ func (s *cql2ATSSuite) assertAtLeastOneQueryableForEachDataSource() error {
 }
 
 func (s *cql2ATSSuite) assertDataTypeSpecifiedForEachQueryable() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -213,7 +220,7 @@ func (s *cql2ATSSuite) assertDataTypeSpecifiedForEachQueryable() error {
 }
 
 func (s *cql2ATSSuite) assertAtLeastOneScalarQueryable() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return nil
 	}
 	s.executedByStep = true
@@ -469,7 +476,7 @@ func (s *cql2ATSSuite) evaluateBooleanFilter(filter string) error {
 }
 
 func (s *cql2ATSSuite) evaluateStringPredicateTemplate(template string) error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	if s.current.ID != advancedLikeATSID && !s.isInsensitiveStringPredicateATS() {
@@ -509,7 +516,7 @@ func (s *cql2ATSSuite) evaluateTypedQueryableFilterExpression(typ, template stri
 }
 
 func (s *cql2ATSSuite) evaluateEachFixturePredicate() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	if s.current.ID != basicTestDataATSID &&
@@ -566,19 +573,36 @@ func (s *cql2ATSSuite) evaluateSpecificStoredPredicateCombination(template strin
 }
 
 func (s *cql2ATSSuite) assertSuccessfulATSEvaluation() error {
-	if !s.isImplementedScalarATS() {
-		if s.isParserOnlyATS() || s.isSpatialATS() && len(s.spatialFilters) > 0 {
-			return s.arrayPredicateParsingSucceeds()
-		}
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
-	if s.expectsFilterEvaluation() && len(s.atsEvaluations) == 0 && s.parseAttempts == 0 {
+	if err := s.assertEvaluationWorkRecorded(); err != nil {
+		return err
+	}
+	if err := s.assertLogicalCombinationCoverage(); err != nil {
+		return err
+	}
+	return s.assertRecordedEvaluationsSucceeded()
+}
+
+func (s *cql2ATSSuite) assertEvaluationWorkRecorded() error {
+	requiresEvaluationWork := s.expectsFilterEvaluation()
+	hasEvaluationWork := len(s.atsEvaluations) > 0 || s.parseAttempts > 0
+	if requiresEvaluationWork && !hasEvaluationWork {
 		return fmt.Errorf("%s asserted successful evaluation but recorded no parse checks or fixture evaluations", s.current.ID)
 	}
-	if s.isLogicalCombinationATS() && s.logicalCombinations < 10 {
-		return fmt.Errorf("logical ATS scenario recorded %d combinations, want at least 10", s.logicalCombinations)
+	return nil
+}
+
+func (s *cql2ATSSuite) assertLogicalCombinationCoverage() error {
+	if !s.isLogicalCombinationATS() || s.logicalCombinations >= 10 {
+		return nil
 	}
+	return fmt.Errorf("logical ATS scenario recorded %d combinations, want at least 10", s.logicalCombinations)
+}
+
+func (s *cql2ATSSuite) assertRecordedEvaluationsSucceeded() error {
 	for _, evaluation := range s.atsEvaluations {
 		if evaluation.Err != nil {
 			return fmt.Errorf("evaluate %q: %w", evaluation.Filter, evaluation.Err)
@@ -588,7 +612,7 @@ func (s *cql2ATSSuite) assertSuccessfulATSEvaluation() error {
 }
 
 func (s *cql2ATSSuite) assertExpectedATSResultsReturned() error {
-	if !s.isImplementedScalarATS() {
+	if !s.isFixtureBackedATS() {
 		return s.unimplementedATSFixtureStep()
 	}
 	s.executedByStep = true
