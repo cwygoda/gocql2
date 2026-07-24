@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.1 - 2026-07-24
+#### Bug Fixes
+- (**parser**) accept lowercase JSON a_containedby - (d287fc8) - Christian Wygoda
+
+- - -
+
 ## v0.10.0 - 2026-06-06
 #### Features
 - add CQL2 serialization - (55e9b11) - Christian Wygoda
