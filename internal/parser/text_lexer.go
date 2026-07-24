@@ -26,6 +26,7 @@ const (
 
 type token struct {
 	text string
+	raw  string
 	span api.Span
 	kind tokenKind
 }
@@ -235,7 +236,7 @@ func (l *lexer) identifierToken(start api.Location) (token, error) {
 	text := l.input[begin:l.byteOffset]
 	upper := strings.ToUpper(text)
 	if _, ok := reservedTextKeywords[upper]; ok {
-		return token{kind: tokenKeyword, text: upper, span: api.Span{Start: start, End: l.location()}}, nil
+		return token{kind: tokenKeyword, text: upper, raw: text, span: api.Span{Start: start, End: l.location()}}, nil
 	}
 	return token{kind: tokenIdentifier, text: text, span: api.Span{Start: start, End: l.location()}}, nil
 }

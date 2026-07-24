@@ -404,6 +404,12 @@ func (p *textParser) parseScalarPrimary(depth int) (api.ScalarExpression, error)
 		}
 		return propertyRef(tok.text, tok.span, p.cfg, api.LanguageText, tok.span.Start)
 	case tokenKeyword:
+		if isTemporalConstructorKeyword(tok) && !p.nextIs(tokenLParen, "") {
+			prop, ok, err := p.keywordPropertyRef(tok)
+			if ok || err != nil {
+				return prop, err
+			}
+		}
 		if tok.text == "TRUE" || tok.text == "FALSE" {
 			p.advance()
 			return &api.Literal{Kind: api.LiteralBool, Value: tok.text == "TRUE", Src: tok.span}, nil
@@ -544,11 +550,34 @@ func (p *textParser) parseTemporalPredicate(op api.TemporalPredicateOp, depth in
 	return &api.TemporalPredicateExpression{Op: op, Left: left, Right: right, Src: api.Span{Start: nameTok.span.Start, End: end.span.End}}, nil
 }
 
+func isTemporalConstructorKeyword(tok token) bool {
+	return tok.kind == tokenKeyword && (tok.text == "DATE" || tok.text == "TIMESTAMP" || tok.text == "INTERVAL")
+}
+
+func (p *textParser) keywordPropertyRef(tok token) (*api.PropertyRef, bool, error) {
+	if !p.cfg.properties.restricted || tok.raw == "" {
+		return nil, false, nil
+	}
+	if _, ok := p.cfg.properties.lookup(tok.raw); !ok {
+		return nil, false, nil
+	}
+	p.advance()
+	prop, err := propertyRef(tok.raw, tok.span, p.cfg, api.LanguageText, tok.span.Start)
+	return prop, true, err
+}
+
 func (p *textParser) parseTemporalOperand(depth int) (api.Node, error) {
 	if depth > p.cfg.MaxDepth {
 		return nil, p.errorHere("maximum parse depth exceeded")
 	}
-	if p.at(tokenKeyword, "DATE") || p.at(tokenKeyword, "TIMESTAMP") || p.at(tokenKeyword, "INTERVAL") {
+	if isTemporalConstructorKeyword(p.peek()) {
+		if p.nextIs(tokenLParen, "") {
+			return p.parseTemporalInstance(depth + 1)
+		}
+		prop, ok, err := p.keywordPropertyRef(p.peek())
+		if ok || err != nil {
+			return prop, err
+		}
 		return p.parseTemporalInstance(depth + 1)
 	}
 	node, err := p.parseScalarPrimary(depth + 1)
@@ -774,6 +803,14 @@ func spanFrom(first, last api.Node) api.Span {
 }
 
 func (p *textParser) peek() token { return p.tokens[p.pos] }
+
+func (p *textParser) nextIs(kind tokenKind, text string) bool {
+	if p.pos+1 >= len(p.tokens) {
+		return false
+	}
+	tok := p.tokens[p.pos+1]
+	return tok.kind == kind && (text == "" || tok.text == text)
+}
 
 func (p *textParser) previous() token { return p.tokens[p.pos-1] }
 
