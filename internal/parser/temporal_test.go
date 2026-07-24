@@ -62,6 +62,28 @@ func TestTemporalPredicatesTextAndJSON(t *testing.T) {
 	}
 }
 
+func TestParseTextTemporalPredicateAllowsDatePropertyName(t *testing.T) {
+	parser := NewParser().
+		WithConformance(api.ConformanceBasicCQL2, api.ConformanceTemporalFunctions).
+		WithAllowedProperties(api.PropertyDefinition{Name: "date", Type: api.PropertyTypeDate})
+
+	expr, err := parser.ParseText(`T_EQUALS(date, DATE('2022-04-16'))`)
+	if err != nil {
+		t.Fatalf("ParseText: %v", err)
+	}
+	temporal, ok := expr.(*api.TemporalPredicateExpression)
+	if !ok {
+		t.Fatalf("expr = %T, want *api.TemporalPredicateExpression", expr)
+	}
+	left, ok := temporal.Left.(*api.PropertyRef)
+	if !ok {
+		t.Fatalf("left = %T, want *api.PropertyRef", temporal.Left)
+	}
+	if left.Name != "date" {
+		t.Fatalf("property name = %q, want date", left.Name)
+	}
+}
+
 func TestParseJSONTemporalOpNamesAreCaseSensitive(t *testing.T) {
 	cases := []string{
 		`{"op":"T_AFTER","args":[{"property":"event_time"},{"timestamp":"2022-04-24T07:59:57Z"}]}`,
