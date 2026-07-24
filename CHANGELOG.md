@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.2 - 2026-07-24
+#### Bug Fixes
+- (**parser**) allow date temporal property names - (08ee02e) - Christian Wygoda
+
+- - -
+
 ## v0.10.1 - 2026-07-24
 #### Bug Fixes
 - (**parser**) accept lowercase JSON a_containedby - (d287fc8) - Christian Wygoda
