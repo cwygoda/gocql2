@@ -16,6 +16,7 @@ var arrayPredicateOps = map[string]api.ArrayPredicateOp{
 var jsonArrayPredicateOps = map[string]api.ArrayPredicateOp{
 	"a_contains":    api.ArrayOpContains,
 	"a_containedBy": api.ArrayOpContainedBy,
+	"a_containedby": api.ArrayOpContainedBy,
 	"a_equals":      api.ArrayOpEquals,
 	"a_overlaps":    api.ArrayOpOverlaps,
 }

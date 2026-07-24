@@ -416,6 +416,32 @@ func TestPostGISSpatialArrayAndGeometryVariants(t *testing.T) {
 	}
 }
 
+func TestPostGISJSONArrayContainedByLowercaseOp(t *testing.T) {
+	props := []cql2sql.Property{
+		{Name: "tags", Type: api.PropertyTypeArray, Expr: cql2sql.Column("tags")},
+	}
+	expr, err := gocql2.NewParser().
+		WithConformance(api.ConformanceBasicCQL2, api.ConformanceArrayFunctions).
+		WithAllowedProperties(cql2sql.PropertyDefinitions(props...)...).
+		ParseJSON([]byte(`{"op":"a_containedby","args":[{"property":"tags"},["red","blue"]]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sql, err := cql2sql.ToSQL(expr, cql2sql.PostGISDialect(), cql2sql.WithSQLProperties(props...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantText := `("tags" <@ ARRAY[$1, $2])`
+	if sql.Text != wantText {
+		t.Fatalf("cql2sql.SQL text:\n got: %s\nwant: %s", sql.Text, wantText)
+	}
+	if !reflect.DeepEqual(sql.Args, []any{"red", "blue"}) {
+		t.Fatalf("cql2sql.SQL args = %#v", sql.Args)
+	}
+}
+
 func TestSQLGeometryLiteralErrorEdges(t *testing.T) {
 	_, err := cql2sql.ToSQL(
 		&api.SpatialPredicateExpression{

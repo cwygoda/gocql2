@@ -75,6 +75,7 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 	}{
 		{input: `{"op":"a_contains","args":[{"property":"tags"},["foo","bar"]]}`, op: api.ArrayOpContains},
 		{input: `{"op":"a_containedBy","args":[[],{"property":"tags"}]}`, op: api.ArrayOpContainedBy},
+		{input: `{"op":"a_containedby","args":[[],{"property":"tags"}]}`, op: api.ArrayOpContainedBy},
 		{input: `{"op":"a_equals","args":[{"property":"tags"},[1,{"op":"+","args":[2,3]},true]]}`, op: api.ArrayOpEquals},
 		{input: `{"op":"a_overlaps","args":[{"op":"get_tags","args":[]},[["nested"],{"op":"=","args":[{"property":"status"},"new"]}]]}`, op: api.ArrayOpOverlaps},
 	}
@@ -94,10 +95,7 @@ func TestParseJSONArrayPredicates(t *testing.T) {
 		}
 	}
 
-	_, err := NewParser().ParseJSON([]byte(`{"op":"a_containedby","args":[[],{"property":"tags"}]}`))
-	assertParseErrorContains(t, err, `function "a_containedby" is not allowed`)
-
-	_, err = NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString}).ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`))
+	_, err := NewParser().WithConformance(api.ConformanceArrayFunctions).WithAllowedProperties(api.PropertyDefinition{Name: "name", Type: api.PropertyTypeString}).ParseJSON([]byte(`{"op":"a_contains","args":[{"property":"name"},["foo"]]}`))
 
 	assertParseErrorContains(t, err, `cannot be used as an array operand`)
 
