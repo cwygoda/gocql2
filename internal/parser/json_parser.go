@@ -221,7 +221,8 @@ func parseJSONExpression(raw json.RawMessage, path api.JSONPath, depth int, cfg 
 		if err != nil {
 			return nil, err
 		}
-		if err := validateInOperands(expr, values, api.LanguageJSON); err != nil {
+		values, err = validateInOperands(expr, values, api.LanguageJSON)
+		if err != nil {
 			return nil, err
 		}
 		if err := validatePropertyPropertyConformance(cfg, api.LanguageJSON, append([]api.ScalarExpression{expr}, values...)...); err != nil {

@@ -154,6 +154,78 @@ func TestAllowedPropertyRegistry(t *testing.T) {
 	assertParseErrorContains(t, err, `property "other" is not allowed`)
 }
 
+func TestParseTemporalStringInListValues(t *testing.T) {
+	parser := NewParser().
+		WithConformance(api.ConformanceAdvancedComparisonOperators).
+		WithAllowedProperties(
+			api.PropertyDefinition{Name: "opened_on", Type: api.PropertyTypeDate},
+			api.PropertyDefinition{Name: "updated_at", Type: api.PropertyTypeTimestamp},
+		)
+
+	cases := []struct {
+		name      string
+		lang      api.Language
+		in        string
+		wantKind  api.TemporalInstantKind
+		wantValue string
+	}{
+		{
+			name:      "text date property",
+			lang:      api.LanguageText,
+			in:        `opened_on IN ('2020-01-15')`,
+			wantKind:  api.TemporalInstantDate,
+			wantValue: "2020-01-15",
+		},
+		{
+			name:      "text timestamp property",
+			lang:      api.LanguageText,
+			in:        `updated_at IN ('2022-04-14T14:48:46Z')`,
+			wantKind:  api.TemporalInstantTimestamp,
+			wantValue: "2022-04-14T14:48:46Z",
+		},
+		{
+			name:      "json date property",
+			lang:      api.LanguageJSON,
+			in:        `{"op":"in","args":[{"property":"opened_on"},["2020-01-15"]]}`,
+			wantKind:  api.TemporalInstantDate,
+			wantValue: "2020-01-15",
+		},
+		{
+			name:      "json timestamp property",
+			lang:      api.LanguageJSON,
+			in:        `{"op":"in","args":[{"property":"updated_at"},["2022-04-14T14:48:46Z"]]}`,
+			wantKind:  api.TemporalInstantTimestamp,
+			wantValue: "2022-04-14T14:48:46Z",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			expr, err := parser.Parse([]byte(tt.in), tt.lang)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			inExpr, ok := expr.(*api.InExpression)
+			if !ok {
+				t.Fatalf("Parse returned %T, want *api.InExpression", expr)
+			}
+			got, ok := inExpr.Values[0].(*api.TemporalInstant)
+			if !ok {
+				t.Fatalf("IN value = %T, want *api.TemporalInstant", inExpr.Values[0])
+			}
+			if got.Kind != tt.wantKind || got.Value != tt.wantValue {
+				t.Fatalf("temporal IN value = %#v, want kind %q value %q", got, tt.wantKind, tt.wantValue)
+			}
+		})
+	}
+
+	_, err := parser.ParseText(`opened_on IN ('2020-02-30')`)
+	assertParseErrorContains(t, err, `invalid date`)
+
+	_, err = parser.ParseJSON([]byte(`{"op":"in","args":[{"property":"opened_on"},["2020-02-30"]]}`))
+	assertParseErrorContains(t, err, `$.args[1][0]`)
+	assertParseErrorContains(t, err, `invalid date`)
+}
+
 func TestParseDispatchAndJSONPathString(t *testing.T) {
 	path := api.JSONPathRoot().Key("args").Index(1).Key("property")
 	if got, want := path.String(), "$.args[1].property"; got != want {

@@ -200,21 +200,59 @@ func validateComparisonOperands(op api.ComparisonOp, left, right api.ScalarExpre
 	return nil
 }
 
-func validateInOperands(expr api.ScalarExpression, values []api.ScalarExpression, source api.Language) error {
+func validateInOperands(
+	expr api.ScalarExpression,
+	values []api.ScalarExpression,
+	source api.Language,
+) ([]api.ScalarExpression, error) {
 	if err := validateScalarExpression(expr, source); err != nil {
-		return err
+		return nil, err
 	}
 	exprType := scalarExpressionType(expr)
-	for _, value := range values {
-		if err := validateScalarExpression(value, source); err != nil {
-			return err
+	coercedValues := make([]api.ScalarExpression, len(values))
+	for i, value := range values {
+		coercedValue, err := coerceTemporalInListValue(exprType, value, source)
+		if err != nil {
+			return nil, err
 		}
-		valueType := scalarExpressionType(value)
+		if err := validateScalarExpression(coercedValue, source); err != nil {
+			return nil, err
+		}
+		valueType := scalarExpressionType(coercedValue)
 		if !areComparableTypes(exprType, valueType) {
-			return parseError(source, value.Span().Start, fmt.Sprintf("IN list value has type %s, expected %s", describePropertyType(valueType), describePropertyType(exprType)))
+			message := fmt.Sprintf(
+				"IN list value has type %s, expected %s",
+				describePropertyType(valueType),
+				describePropertyType(exprType),
+			)
+			return nil, parseError(source, coercedValue.Span().Start, message)
 		}
+		coercedValues[i] = coercedValue
 	}
-	return nil
+	return coercedValues, nil
+}
+
+func coerceTemporalInListValue(
+	exprType api.PropertyType,
+	value api.ScalarExpression,
+	source api.Language,
+) (api.ScalarExpression, error) {
+	if !isInstantPropertyType(exprType) {
+		return value, nil
+	}
+	literal, ok := value.(*api.Literal)
+	if !ok || literal.Kind != api.LiteralString {
+		return value, nil
+	}
+	text, ok := literal.Value.(string)
+	if !ok {
+		return value, nil
+	}
+	kind, err := temporalInstantKindFromString(text)
+	if err != nil {
+		return nil, parseError(source, literal.Span().Start, err.Error())
+	}
+	return &api.TemporalInstant{Kind: kind, Value: text, Src: literal.Src}, nil
 }
 
 func validateArrayPredicateOperands(left, right api.Node, source api.Language) error {
