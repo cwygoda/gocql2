@@ -237,7 +237,8 @@ func (p *textParser) parsePrimaryExpression(depth int) (api.Expression, error) {
 		if len(values) == 0 {
 			return nil, parseError(api.LanguageText, end.span.Start, "IN list must not be empty")
 		}
-		if err := validateInOperands(left, values, api.LanguageText); err != nil {
+		values, err = validateInOperands(left, values, api.LanguageText)
+		if err != nil {
 			return nil, err
 		}
 		if err := validatePropertyPropertyConformance(p.cfg, api.LanguageText, append([]api.ScalarExpression{left}, values...)...); err != nil {
