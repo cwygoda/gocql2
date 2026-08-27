@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.4 - 2026-08-27
+#### Bug Fixes
+- (**parser**) coerce temporal IN string literals - (a58d747) - Christian Wygoda
+
+- - -
+
 ## v0.10.3 - 2026-08-27
 #### Bug Fixes
 - (**deps**) update indirect dependencies to address vulnerability - (6e55453) - Christian Wygoda
