@@ -2,6 +2,20 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.10.3 - 2026-08-27
+#### Bug Fixes
+- (**deps**) update indirect dependencies to address vulnerability - (6e55453) - Christian Wygoda
+- (**sql**) render boolean literals inline - (8955f58) - Christian Wygoda
+- stop ATS false-positive passes - (10d48ea) - Christian Wygoda
+#### Tests
+- clarify ATS fixture-backed runner intent - (d042221) - Christian Wygoda
+- strengthen ATS shallow coverage - (49934eb) - Christian Wygoda
+- evaluate ATS array and temporal fixtures - (cab11a1) - Christian Wygoda
+#### Continuous Integration
+- pin lint Go version - (d6c8d1d) - Christian Wygoda
+
+- - -
+
 ## v0.10.2 - 2026-07-24
 #### Bug Fixes
 - (**parser**) allow date temporal property names - (08ee02e) - Christian Wygoda
