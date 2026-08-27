@@ -218,6 +218,7 @@ func TestToSQLPredicateVariants(t *testing.T) {
 		{name: "power", cql: "height ^ 2 = 4", conf: []string{api.ConformanceArithmetic}, want: `(power("height", CAST($1 AS numeric)) = CAST($2 AS numeric))`, args: []any{"2", "4"}},
 		{name: "boolean literal", cql: "TRUE", want: `TRUE`},
 		{name: "false literal", cql: "FALSE", want: `FALSE`},
+		{name: "boolean literal comparison", cql: "TRUE = TRUE", conf: []string{api.ConformancePropertyProperty}, want: `(TRUE = TRUE)`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

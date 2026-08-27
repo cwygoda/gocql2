@@ -335,6 +335,11 @@ func (c *sqlCompiler) renderLiteral(lit *api.Literal) (Fragment, error) {
 	switch lit.Kind {
 	case api.LiteralNumber:
 		return c.dialect.RenderNumberLiteral(c, sqlNumberText(lit.Value))
+	case api.LiteralBool:
+		if b, ok := lit.Value.(bool); ok && b {
+			return Fragment{Text: "TRUE"}, nil
+		}
+		return Fragment{Text: "FALSE"}, nil
 	case api.LiteralNull:
 		return Fragment{Text: "NULL"}, nil
 	default:
